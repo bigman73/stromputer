@@ -29,17 +29,18 @@
 // []
 // []
 // []   Versions:
-// []     0.7 - Prototype, ADC worksonly with PCF8591
-// []     0.8 - Prototype, ADC works with Arudino Analog or PCF8591
-// []     0.9 - 12/3/2011, Prototype, add timed actions - Battery and Temperature should not be polled every loop, just once a few seconds
-// []     0.10 - Stable Prototype
+// []     0.07 - Prototype, ADC worksonly with PCF8591
+// []     0.08 - Prototype, ADC works with Arudino Analog or PCF8591
+// []     0.09 - Prototype, add timed actions - Battery and Temperature should not be polled every loop, just once a few seconds
+// []     0.10 - 12/3/2011, Stable Prototype, first version in Google Code/SVN
+// []     0.11 - 12/4/2011, Added gear led logic in software, refactored code to use ISR for main board blink and gear neutral blinking led, changed welcome screen
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
 // References/Credits:
 // DS1631: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1221926830
 
-#define VERSION "0.10"
+#define VERSION "0.11"
 
 #include <Wire.h>
 #include <inttypes.h>
@@ -59,6 +60,8 @@
 TimedAction battLevelTimedAction = TimedAction( 2000, ProcessBatteryLevel );
 // Timed action for processing temperature
 TimedAction temperatureTimedAction = TimedAction( 5000, ProcessTemperature );
+// Timed action for Main Sampling/Display Loop
+TimedAction mainLoopTimedAction = TimedAction( 100, MainLoopTimedAction );
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable serial debugging info (tracing)
@@ -130,15 +133,23 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 #define GEARN_TO_VOLTS   5.00f + 0.5f
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+#define GEAR_NEUTRAL 0
+#define GEAR_ERROR -1
+
 // Battery level (4:1 voltage divider) is connected to Analog Pin 0
 #define ANALOGPIN_BATT_LEVEL 0
 // Gear Position (2:1 voltage divider) is connected to Analog Pin 1
 #define ANALOGPIN_GEAR_POSITION 1
 
-#define LED_PIN 13
+
+// Note: 6 Digital outputs will be used for Gear LEDs - from GEAR1_LED_PIN .. GEAR1_LED_PIN + 5 (inclusive), for a total of 6 pins, each pin dedicated to a gear respectively.
+#define GEAR_BASE_LED_PIN 2
+
+int ledGears[6] = { LOW, LOW, LOW, LOW, LOW, LOW };
+
+#define BOARD_LED_PIN 13
 
 #define IsBetween( x, a, b ) ( x >= a && x <= b ? 1 : 0 )
-
 
 // --------------------------------------------------------------------------
 // Variables
@@ -161,7 +172,7 @@ float battLevel;             // Volts
 float lastBattLevel = -0.1;  // Force initial update
 byte battReadError = 0;
 
-int displayRefreshTime = 125; // msec
+int LoopSleepTime = 25; // msec
 
 // --------------------------------------------------------------------------
 
@@ -176,9 +187,9 @@ int displayRefreshTime = 125; // msec
 #define GEAR_LABEL "Gear " 
 #define TEMPERATURE_LABEL "Temp "
 #define BATTERY_LABEL "Batt "
-#define Welcome1_Line1 "V-Strom Mk1B"
+#define Welcome1_Line1 "Stromputer-DL650"
 #define Welcome1_Line2 "\"White Pearl\""
-#define Welcome2_Line1 "Bigman73 Ver="
+#define Welcome2_Line1 "F/W Ver="
 #define Welcome2_Line2 "Stromtrooper.com"
 
 /// --------------------------------------------------------------------------
@@ -190,9 +201,9 @@ void setup()
     Serial.begin( SERIAL_SPEED );
     Serial.print("------- V-Strom Mk1B, VERSION: "); Serial.println(VERSION);
     
-    pinMode(LED_PIN, OUTPUT);     
-    BlinkLed();
-    
+    pinMode( BOARD_LED_PIN, OUTPUT );
+    digitalWrite( BOARD_LED_PIN, HIGH );  
+     
     lcd.init();                          // Init the display, clears the display
 
     // Set initial backlight
@@ -211,6 +222,25 @@ void setup()
     #ifdef PCF8591_READ
         Serial.print( "===>     PCF8591_READ" );
     #endif
+    
+    // Set the digital pins of gears LEDs as output (starting at 
+    for ( int gearLedPin = GEAR_BASE_LED_PIN; gearLedPin < GEAR_BASE_LED_PIN + 6; gearLedPin++ )
+    {
+        pinMode( gearLedPin, OUTPUT);     
+    }
+    
+    // See also: http://letsmakerobots.com/node/28278
+    // initialize timer1 
+    noInterrupts();           // disable all interrupts
+    TCCR1A = 0;
+    TCCR1B = 0;
+    TCNT1  = 0;
+    
+    OCR1A = 15625 / 16;            // compare match register 16MHz/256/ ( 1Hz / 16 ), i.e. 16Hz or 62.5msec
+    TCCR1B |= (1 << WGM12);   // CTC mode
+    TCCR1B |= (1 << CS12);    // 256 prescaler 
+    TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
+    interrupts();             // enable all interrupts
 }
 
 /// --------------------------------------------------------------------------
@@ -218,7 +248,16 @@ void setup()
 /// --------------------------------------------------------------------------
 void loop()
 {
-    BlinkLed();
+    // Timed Actions ("Events")
+    battLevelTimedAction.check();       
+    temperatureTimedAction.check();
+    mainLoopTimedAction.check();
+    
+    delay(LoopSleepTime);
+}
+
+void MainLoopTimedAction()
+{
     #ifdef PCF8591_READ
          ReadBatteryAndGearPositionPCF8591();
     #else
@@ -232,19 +271,45 @@ void loop()
     #endif
 
     PrintGearPosition();
-
-    battLevelTimedAction.check();       
-    temperatureTimedAction.check();
-
-    delay(displayRefreshTime);
 }
+
+int mainBoardLedValue = LOW;
+int timerDivider = 0;
+int neutralGearLedValue = LOW;
+
+
+// timer compare interrupt service routine
+// Assumed to run on 16Hz (62.5msec)
+ISR(TIMER1_COMPA_vect)          
+{
+    // Handle main board blinking at 1Hz for each toggle
+    if ( timerDivider % 16 == 1 ) 
+    {
+        /// Toggle the Main Board LED
+        mainBoardLedValue = ( mainBoardLedValue == LOW ) ? HIGH : LOW;
+        // Write main board led pin
+        digitalWrite( BOARD_LED_PIN, mainBoardLedValue );  
+    }
+
+    // Handle neutral gear blinking, at 2Hz for each toggle
+    if ( timerDivider % 8 == 1  && 
+         gear == GEAR_NEUTRAL )
+    {
+        // Toggle 1st led Gear, for signaling rider the gear is N
+        neutralGearLedValue = ( neutralGearLedValue == LOW ) ?  HIGH : LOW;
+        digitalWrite( GEAR_BASE_LED_PIN, neutralGearLedValue );   // sets the 1st LED status
+    }    
+    
+    timerDivider++;
+}
+
 
 /// --------------------------------------------------------------------------
 /// Timed Action Event handler for battLevelTimedAction - 
-//     Processes the battery level
+///     Processes the battery level
 /// --------------------------------------------------------------------------
 void ProcessBatteryLevel()
-{
+{   
     #ifndef PCF8591_READ
     ReadBatteryLevelAnalog();
     #endif
@@ -439,7 +504,6 @@ void ReadGearPositionAnalog()
     DetermineCurrentGear();
     
     gearReadError = false; // Clear read error - we made it here
-    
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -460,9 +524,11 @@ void DetermineCurrentGear()
      else if ( IsBetween( gearPositionVolts, GEAR6_FROM_VOLTS, GEAR6_TO_VOLTS ) )
          gear = 6;
      else if ( IsBetween( gearPositionVolts, GEARN_FROM_VOLTS, GEARN_TO_VOLTS ) )
-         gear = 0;  // Neutral
+         gear = GEAR_NEUTRAL;  // Neutral
      else
-         gear = -1;
+         gear = GEAR_ERROR; // Default: Error
+         
+    // gear = 2;
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -486,11 +552,29 @@ void PrintGearPosition()
     #ifdef SERIAL_DEBUG
     Serial.print( ", lastGear = " ); Serial.print( lastGear );
     Serial.print( ", gear = " ); Serial.println( gear );
-    #endif
+    #endif 
     
     // Keep the current gear position, to optimize display time
     lastGear = gear;
-
+    
+    // TODO: Different algorithms are possible - e.g. each gear has its own led, or incremental, or incremental with top gear (6th) lighting alone
+    // Currently option 3 is implemented. 
+    ledGears[1-1] = (gear < 6);
+    ledGears[2-1] = (gear >= 2 && gear < 6);
+    ledGears[3-1] = (gear >= 3 && gear < 6);
+    ledGears[4-1] = (gear >= 4 && gear < 6);
+    ledGears[5-1] = (gear >= 5 && gear < 6);
+    ledGears[6-1] = (gear == 6);
+    
+    // Note: Netural blinking logic is handled in NeutralGearLedBlink() function below
+    
+    // Update each gear led
+    for ( int gearLed = 1; gearLed <= 6; gearLed++ )
+    {
+        // sets the gear LED status
+        digitalWrite( GEAR_BASE_LED_PIN + gearLed - 1, ledGears[ gearLed - 1 ] );   
+    }
+    
     // Print Gear Position Label
     lcd.setCursor( 0, 6 );
     // TODO: RESTORE ONCE GEAR IS STABLE
@@ -523,7 +607,6 @@ void PrintGearPosition()
     Serial.print( "\t gearValue = " ); Serial.println( gearValue );
     #endif
 }
-
 
 
 /// ----------------------------------------------------------------------------------------------------
@@ -695,13 +778,3 @@ int ControlPCF8591_I2C(byte dac_value, byte adc_values[], byte adcChannelMask )
     return 1;
 }    
 
-/// ----------------------------------------------------------------------------------------------------
-/// Blinks the LED once (on and off)
-/// ----------------------------------------------------------------------------------------------------
-void BlinkLed()
-{
-    digitalWrite(LED_PIN, HIGH);   // set the LED on
-    delay(10);
-    digitalWrite(LED_PIN, LOW);   // set the LED off
-    delay(10);
-}

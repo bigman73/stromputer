@@ -2,12 +2,12 @@
 // []
 // []   V-Strom Mk1B - An extra display for a Suzuki DL-650 ("V-Strom") that adds the following functionality:
 // []	  1. Battery Level display in Volts - e.g. 14.5V
-// []	  2. Gear Position Indicator - e.g. 1, 2, 3, 4, 5, 6, N
+// []	  2. Gear Position Indicator on LCD - e.g. 1, 2, 3, 4, 5, 6, N
 // []	  3. Ambient Temperature in Farenheight or Celsius - e.g. 62.5F
-// []	  4. [Future] Led display the gear position (one led for each gear 1-6, in different colors, N will be either blank or blinking 1)
+// []	  4. [Future] LED display of gear position (one led for each gear 1-6, in different colors, N will be blinking on 1)
 // []	  5. [Future] Accurate display of the fuel level (in percentage)
-// []	  6. [Future] Fix the OEM V-Strom Fuel Gauge to become linear
-// []
+// []     6. [Future] Show Fuel consumption - MPG or KM/L, TBD: need to tap into motorcycle's speed sensor (PWM)
+// []	  7. [Future] Fix the OEM V-Strom Fuel Gauge to become linear
 // []     License: GPL V3
 /*
     Stromputer - Enhanced display for Suzuki V-Strom Motorcycles (DL-650, DL-1000, years 2004-2011)
@@ -34,13 +34,16 @@
 // []     0.09 - Prototype, add timed actions - Battery and Temperature should not be polled every loop, just once a few seconds
 // []     0.10 - 12/3/2011, Stable Prototype, first version in Google Code/SVN
 // []     0.11 - 12/4/2011, Added gear led logic in software, refactored code to use ISR for main board blink and gear neutral blinking led, changed welcome screen
+// []     0.12 - 12/5/2011, Added direct gear emulation (tactile button)
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
 // References/Credits:
 // DS1631: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1221926830
+// ISR: http://letsmakerobots.com/node/28278
+// Light Sensors: http://www.ladyada.net/learn/sensors/cds.html
 
-#define VERSION "0.11"
+#define VERSION "0.12"
 
 #include <Wire.h>
 #include <inttypes.h>
@@ -61,7 +64,7 @@ TimedAction battLevelTimedAction = TimedAction( 2000, ProcessBatteryLevel );
 // Timed action for processing temperature
 TimedAction temperatureTimedAction = TimedAction( 5000, ProcessTemperature );
 // Timed action for Main Sampling/Display Loop
-TimedAction mainLoopTimedAction = TimedAction( 100, MainLoopTimedAction );
+TimedAction mainLoopTimedAction = TimedAction( 50, MainLoopTimedAction );
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable serial debugging info (tracing)
@@ -79,6 +82,9 @@ TimedAction mainLoopTimedAction = TimedAction( 100, MainLoopTimedAction );
 // Comment in/out to enable/disable PCF8591 DAC Gear Emulation
 // #define PCF8591_GEAR_EMULATOR
 
+// Comment in/out to enable/disable manual gear emulation (using two tactile buttons)
+#define MANUAL_GEAR_EMULATION
+
 // Temperature mode - F or C
 #define TEMPERATURE_MODE 'F'
 
@@ -91,6 +97,8 @@ TimedAction mainLoopTimedAction = TimedAction( 100, MainLoopTimedAction );
 
 // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
 LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
+
+int lcdBackLight = 2; // Default initial LCD back light
 // --------------------------------------------------------------------------
 
 
@@ -136,11 +144,16 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 #define GEAR_NEUTRAL 0
 #define GEAR_ERROR -1
 
+#define MANUAL_GEAR_DOWN_PIN 11
+#define MANUAL_GEAR_UP_PIN 12
+
+// Buttons are pulled up, so pressed is zero voltage or logical zero, released is VCC or logical on
+#define BUTTON_DOWN 0
+
 // Battery level (4:1 voltage divider) is connected to Analog Pin 0
 #define ANALOGPIN_BATT_LEVEL 0
 // Gear Position (2:1 voltage divider) is connected to Analog Pin 1
 #define ANALOGPIN_GEAR_POSITION 1
-
 
 // Note: 6 Digital outputs will be used for Gear LEDs - from GEAR1_LED_PIN .. GEAR1_LED_PIN + 5 (inclusive), for a total of 6 pins, each pin dedicated to a gear respectively.
 #define GEAR_BASE_LED_PIN 2
@@ -163,16 +176,18 @@ float lastTemperature = -99; // Force initial update
 byte temperatureReadError = 0;
 
 int gear = 0;               // 0 = Neutral, or 1-6
-int lastGear = -2;          // Force initial update
+int lastGearLCD = -2;          // Force initial update
+int lastGearLED = -2;       // Force initial update
 float gearVolts[] = { 5, 4.5, 4.8, 4.3 };
 byte gearReadError = 0;
 float gearPositionVolts = 0;
+int gearButtonTriggered = true; // Used to ensure that a tactile button has to be released up, before the system handles the next button down event ("Click")
  
 float battLevel;             // Volts
 float lastBattLevel = -0.1;  // Force initial update
 byte battReadError = 0;
 
-int LoopSleepTime = 25; // msec
+int LoopSleepTime = 5; // msec
 
 // --------------------------------------------------------------------------
 
@@ -208,7 +223,7 @@ void setup()
 
     // Set initial backlight
     // TODO: In future, control automatically and continously with light sensor
-    lcd.setBacklight( 2 );
+    lcd.setBacklight( lcdBackLight );
 
     #ifdef SHOW_WELCOME
     PrintWelcomeScreen(Welcome1_Line1, Welcome1_Line2, 1000, 25, DIRECTION_RIGHT );
@@ -229,8 +244,13 @@ void setup()
         pinMode( gearLedPin, OUTPUT);     
     }
     
-    // See also: http://letsmakerobots.com/node/28278
-    // initialize timer1 
+    // sets the digital pin of gear tacktile button as input
+    #ifdef MANUAL_GEAR_EMULATION
+    pinMode(MANUAL_GEAR_DOWN_PIN, INPUT);      
+    pinMode(MANUAL_GEAR_UP_PIN, INPUT);      
+    #endif
+    
+    // initialize timer1 in CTC model for 16Hz
     noInterrupts();           // disable all interrupts
     TCCR1A = 0;
     TCCR1B = 0;
@@ -248,16 +268,23 @@ void setup()
 /// --------------------------------------------------------------------------
 void loop()
 {
-    // Timed Actions ("Events")
-    battLevelTimedAction.check();       
-    temperatureTimedAction.check();
     mainLoopTimedAction.check();
     
     delay(LoopSleepTime);
 }
 
+/// --------------------------------------------------------------------------
+/// Timed Action Event handler for Main Loop 
+/// Note: Used instead of the stock main loop, to ensure better more accurate
+///         timed scheduling, due to use of the TimedAction mechanism. In stock main
+///          loop a typical sleep is needed, which is avoided here.
+/// --------------------------------------------------------------------------
 void MainLoopTimedAction()
 {
+    // Timed Actions ("Events")
+    battLevelTimedAction.check();       
+    temperatureTimedAction.check();
+
     #ifdef PCF8591_READ
          ReadBatteryAndGearPositionPCF8591();
     #else
@@ -266,10 +293,8 @@ void MainLoopTimedAction()
         dac_value += 4;
         ControlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 ); // Output DAC, ADC from channel 1
         #endif
-        
-        ReadGearPositionAnalog();          
     #endif
-
+    
     PrintGearPosition();
 }
 
@@ -278,8 +303,10 @@ int timerDivider = 0;
 int neutralGearLedValue = LOW;
 
 
-// timer compare interrupt service routine
-// Assumed to run on 16Hz (62.5msec)
+/// --------------------------------------------------------------------------
+/// Timer compare Interrupt Service Routine (ISR)
+/// Note: Setup to run on 16Hz (62.5msec)
+/// --------------------------------------------------------------------------
 ISR(TIMER1_COMPA_vect)          
 {
     // Handle main board blinking at 1Hz for each toggle
@@ -291,6 +318,12 @@ ISR(TIMER1_COMPA_vect)
         digitalWrite( BOARD_LED_PIN, mainBoardLedValue );  
     }
 
+    // Handle gear position read
+    HandleGearPositionRead();
+
+    // Update Gear Position LEDs (note: UpdateGearLEDs() is optimized to only actually refresh on gear change)
+    UpdateGearLEDs();
+    
     // Handle neutral gear blinking, at 2Hz for each toggle
     if ( timerDivider % 8 == 1  && 
          gear == GEAR_NEUTRAL )
@@ -299,10 +332,54 @@ ISR(TIMER1_COMPA_vect)
         neutralGearLedValue = ( neutralGearLedValue == LOW ) ?  HIGH : LOW;
         digitalWrite( GEAR_BASE_LED_PIN, neutralGearLedValue );   // sets the 1st LED status
     }    
-    
+
     timerDivider++;
 }
 
+
+void HandleGearPositionRead()
+{
+    #ifndef PCF8591_READ    
+        #ifdef MANUAL_GEAR_EMULATION
+            // read the input pin for Gear Up button
+            int manualButtonValue = digitalRead(MANUAL_GEAR_UP_PIN);
+            if ( manualButtonValue == BUTTON_DOWN )
+            {
+                if ( gearButtonTriggered )
+                {
+                    gear++;
+                    gearButtonTriggered = false;
+                
+                    if ( gear > 6 )
+                        gear = GEAR_NEUTRAL;
+                }
+            }
+            else
+            {
+                // read the input pin for Gear Down button
+                manualButtonValue = digitalRead(MANUAL_GEAR_DOWN_PIN);
+                if ( manualButtonValue == BUTTON_DOWN )
+                {
+                    if ( gearButtonTriggered )
+                    {
+                        gear--;
+                        gearButtonTriggered = false;
+                
+                        if ( gear < 0)
+                            gear = 6;
+                    }
+                }
+                // Both buttons are UP, therefore are considered triggered
+                else
+                {
+                    gearButtonTriggered = true;
+                }
+            }
+        #else    
+            ReadGearPositionAnalog();          
+        #endif
+    #endif
+}
 
 /// --------------------------------------------------------------------------
 /// Timed Action Event handler for battLevelTimedAction - 
@@ -532,7 +609,7 @@ void DetermineCurrentGear()
 }
 
 /// ----------------------------------------------------------------------------------------------------
-/// Print the current gear position (only if there has been a changed)
+/// Print the current gear position (only if there has been a change)
 /// ----------------------------------------------------------------------------------------------------
 void PrintGearPosition()
 {
@@ -544,37 +621,19 @@ void PrintGearPosition()
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     // Optimization: Don't print the gear position if nothing has changed since the last printing
-    if ( !gearReadError && ( lastGear == gear ) )
+    if ( !gearReadError && ( lastGearLCD == gear ) )
     {
         return;
     }
 
     #ifdef SERIAL_DEBUG
-    Serial.print( ", lastGear = " ); Serial.print( lastGear );
+    Serial.print( ", lastGearLCD = " ); Serial.print( lastGearLCD );
     Serial.print( ", gear = " ); Serial.println( gear );
     #endif 
     
-    // Keep the current gear position, to optimize display time
-    lastGear = gear;
-    
-    // TODO: Different algorithms are possible - e.g. each gear has its own led, or incremental, or incremental with top gear (6th) lighting alone
-    // Currently option 3 is implemented. 
-    ledGears[1-1] = (gear < 6);
-    ledGears[2-1] = (gear >= 2 && gear < 6);
-    ledGears[3-1] = (gear >= 3 && gear < 6);
-    ledGears[4-1] = (gear >= 4 && gear < 6);
-    ledGears[5-1] = (gear >= 5 && gear < 6);
-    ledGears[6-1] = (gear == 6);
-    
-    // Note: Netural blinking logic is handled in NeutralGearLedBlink() function below
-    
-    // Update each gear led
-    for ( int gearLed = 1; gearLed <= 6; gearLed++ )
-    {
-        // sets the gear LED status
-        digitalWrite( GEAR_BASE_LED_PIN + gearLed - 1, ledGears[ gearLed - 1 ] );   
-    }
-    
+    // Keep the current gear position, to optimize LCD display time
+    lastGearLCD = gear;
+        
     // Print Gear Position Label
     lcd.setCursor( 0, 6 );
     // TODO: RESTORE ONCE GEAR IS STABLE
@@ -608,6 +667,36 @@ void PrintGearPosition()
     #endif
 }
 
+/// ----------------------------------------------------------------------------------------------------
+/// Updates the gear LEDs with current gear position (only if there has been a change)
+/// Note: Netural is blinking and is therefore being handled with a timer ISR, by NeutralGearLedBlink() 
+/// ----------------------------------------------------------------------------------------------------
+void UpdateGearLEDs()
+{
+    // Optimization: Don't print the gear position if nothing has changed since the last printing
+    if ( !gearReadError && ( lastGearLED == gear ) )
+    {
+        return;
+    }
+    
+    lastGearLED = gear;
+
+    // TODO: Different algorithms are possible - e.g. each gear has its own led, or incremental, or incremental with top gear (6th) lighting alone
+    // Currently option 3 is implemented. 
+    ledGears[1-1] = (gear < 6);
+    ledGears[2-1] = (gear >= 2 && gear < 6);
+    ledGears[3-1] = (gear >= 3 && gear < 6);
+    ledGears[4-1] = (gear >= 4 && gear < 6);
+    ledGears[5-1] = (gear >= 5 && gear < 6);
+    ledGears[6-1] = (gear == 6);
+        
+    // Update each gear led
+    for ( int gearLed = 1; gearLed <= 6; gearLed++ )
+    {
+        // sets the gear LED status
+        digitalWrite( GEAR_BASE_LED_PIN + gearLed - 1, ledGears[ gearLed - 1 ] );   
+    }
+}
 
 /// ----------------------------------------------------------------------------------------------------
 /// Reads the current temperature from the I2C DS1631 Thermometer 

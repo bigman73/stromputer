@@ -30,7 +30,17 @@
 #ifndef TIMEDACTION_H
 #define TIMEDACTION_H
 
-#include "WProgram.h"
+// **************************************************************************
+// 12/9/2011, YUVAL NAVEH - Patched to compile with Arduino 1.0, 
+//                            as well as older Arudino (e.g. 0023)
+// **************************************************************************
+#if (ARDUINO >= 100)
+#include <Arduino.h>
+#else
+#include <WProgram.h>
+#endif
+// **************************************************************************
+// **************************************************************************
 
 #define NO_PREDELAY 0
 

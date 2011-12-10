@@ -36,7 +36,10 @@
 // []     0.11 - 12/4/2011, Added gear led logic in software, refactored code to use ISR for main board blink and gear neutral blinking led, changed welcome screen
 // []     0.12 - 12/5/2011, Added direct gear emulation (tactile button)
 // []     0.13 - 12/9/2011, Added gear led boot test. Last version compatible with Arduino 0023 before moving to Arduino 1.0
-// []
+// []     0.14 - 12/9/2011, + All LED control was changed to use the LED Library,
+// []                       + Add force LCD update every 15 seconds (workaround to LCD clearing screen from time to time)
+// []                       + Fixed TimedAction to trigger immediately when sketch starts
+// []     0.15 - 12/10/2011, + Changed custom Timer ISR to TimerOne library, Refactored all constants and variables to Stromputer.h header file
 // []
 // []     **** Compatible with ARDUINO: 0023 ****
 // []
@@ -47,12 +50,12 @@
 // ISR: http://letsmakerobots.com/node/28278
 // Light Sensors: http://www.ladyada.net/learn/sensors/cds.html
 
-
-#define VERSION "0.14"
+#define VERSION "0.15"
 
 #include <Wire.h>
 #include <inttypes.h>
 
+// -----------------    Library Includes    ------------------------
 // Include 3rd Party library - LCD I2C NHD
 // http://www.arduino.cc/playground/Code/LCDi2c
 #include <LCDi2cNHD.h>                    
@@ -64,8 +67,11 @@
 // Include 3rd Party library - LED (Modified by Yuval Naveh)
 #include <LED.h>
 
+// Include 3rd Party library - TimerOne, used for Timer ISR
+#include <TimerOne.h>
+// -----------------------------------------------------------------
 
-#define SERIAL_SPEED 9600
+#include "Stromputer.h"
 
 // ---------------- Timed Actions (Scheduled Events) -------------
 // Timed action for processing battery level
@@ -75,151 +81,6 @@ TimedAction temperatureTimedAction = TimedAction( -999999, 5000, ProcessTemperat
 // Timed action for Main Sampling/Display Loop
 TimedAction mainLoopTimedAction = TimedAction( -999999, 50, MainLoopTimedAction );
 
-// ---------------- Control/Operation mode ------------------------
-// Comment in/out to enable/disable serial debugging info (tracing)
-// #define SERIAL_DEBUG
-
-// Comment in/out to enable/disable showing the welcome screen, when the sketch starts
-// #define SHOW_WELCOME
-
-// Comment in/out to enable/disable printing the gear volts
-#define DEBUG_PRINT_GEARVOLTS
-
-// Comment in/out to enable/disable PCF8591 ADC Read/Arduino Analog Read
-/// #define PCF8591_READ
-
-// Comment in/out to enable/disable PCF8591 DAC Gear Emulation
-// #define PCF8591_GEAR_EMULATOR
-
-// Comment in/out to enable/disable manual gear emulation (using two tactile buttons)
-#define MANUAL_GEAR_EMULATION
-
-// Temperature mode - F or C
-#define TEMPERATURE_MODE 'F'
-
-// ------------------------- LCD -------------------------------------------
-#define LCD_ROWS 2
-#define LCD_COLS 16
-#define LCD_I2C_ADDRESS 0x50
-#define LCD_I2C_NHD_SCROLL_LEFT 0x55
-#define LCD_I2C_NHD_SCROLL_RIGHT 0x56
-
-// Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
-LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
-
-int lcdBackLight = 2; // Default initial LCD back light
-// --------------------------------------------------------------------------
-
-
-// ----------------------- DS1631 I2C Thermometer ----------------------------------------
-#define DS1631_I2C_ADDRESS 0x90 >> 1
-#define DS1631_I2C_COMMAND_START_CONVERT 0x51
-#define DS1631_I2C_COMMAND_STOP_CONVERT 0x22
-#define DS1631_I2C_COMMAND_READ_TEMP 0xAA
-#define DS1631_I2C_COMMAND_ACCESS_CONFIG 0xAC
-#define DS1631_I2C_CONTROLBYTE_CONT_12BIT 0x0C
-// ----------------------------------------------------------------------------------------
-
-
-// ----------------------- PCF8591 -------------------------------------------------------
-// PCF8591 I2C Thermometer 
-#define PCF8591_I2C_ADDRESS 0x92 >> 1
-#define PCF8591_DAC_SINGLECHANNEL_MODE 0x40
-// Note: Not related to I2C protocol. Used internally for efficient reading of channels. Channel 0 is always read.
-#define PCF8591_MASK_CHANNEL0 1
-#define PCF8591_MASK_CHANNEL1 2
-#define PCF8591_MASK_CHANNEL2 4
-#define PCF8591_MASK_CHANNEL3 8
-
-// ----------------------------------------------------------------------------------------
-
-// ^^^^^^^^^^^   Gear mapping voltage values ^^^^^^^^^^^
-#define GEAR1_FROM_VOLTS 1.33f - 0.3f
-#define GEAR1_TO_VOLTS   1.33f + 0.2f
-#define GEAR2_FROM_VOLTS 1.77f - 0.2f
-#define GEAR2_TO_VOLTS   1.77f + 0.35f
-#define GEAR3_FROM_VOLTS 2.50f - 0.40f
-#define GEAR3_TO_VOLTS   2.50f + 0.4f
-#define GEAR4_FROM_VOLTS 3.23f - 0.3f
-#define GEAR4_TO_VOLTS   3.23f + 0.4f
-#define GEAR5_FROM_VOLTS 4.10f - 0.4f
-#define GEAR5_TO_VOLTS   4.10f + 0.25f
-#define GEAR6_FROM_VOLTS 4.55f - 0.2f
-#define GEAR6_TO_VOLTS   4.55f + 0.25f
-#define GEARN_FROM_VOLTS 5.00f - 0.24f
-#define GEARN_TO_VOLTS   5.00f + 0.5f
-// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-#define GEAR_NEUTRAL 0
-#define GEAR_ERROR -1
-
-#define MANUAL_GEAR_DOWN_PIN 11
-#define MANUAL_GEAR_UP_PIN 12
-
-// Buttons are pulled up, so pressed is zero voltage or logical zero, released is VCC or logical on
-#define BUTTON_DOWN 0
-
-// Battery level (4:1 voltage divider) is connected to Analog Pin 0
-#define ANALOGPIN_BATT_LEVEL 0
-// Gear Position (2:1 voltage divider) is connected to Analog Pin 1
-#define ANALOGPIN_GEAR_POSITION 1
-
-// Note: 6 Digital outputs will be used for Gear LEDs - from GEAR1_LED_PIN .. GEAR1_LED_PIN + 5 (inclusive), for a total of 6 pins, each pin dedicated to a gear respectively.
-#define GEAR_BASE_LED_PIN 2
-
-LED ledGears[6] = { LED( GEAR_BASE_LED_PIN ), LED( GEAR_BASE_LED_PIN + 1 ), LED( GEAR_BASE_LED_PIN + 2 ), \
-                    LED( GEAR_BASE_LED_PIN + 3 ), LED( GEAR_BASE_LED_PIN + 4 ), LED( GEAR_BASE_LED_PIN + 5 ) };
-
-// create a LED object at with the default on-board LED
-LED onBoardLed = LED();
-
-
-#define IsBetween( x, a, b ) ( x >= a && x <= b ? 1 : 0 )
-
-// --------------------------------------------------------------------------
-// Variables
-
-// Variables used for PCF8591 IC IO
-byte dac_value=0;     // output 0..255 -> 0-5V (or VSS..VREF)
-byte all_adc_values[4];   // Input 0..255 -> 0-5V  (or VSS..VREF)
-
-float temperature;  // Farenheit
-float lastTemperature = -99; // Force initial update
-byte temperatureReadError = 0;
-
-int gear = 0;               // 0 = Neutral, or 1-6
-int lastGearLCD = -2;          // Force initial update
-int lastGearLED = -2;       // Force initial update
-float gearVolts[] = { 5, 4.5, 4.8, 4.3 };
-byte gearReadError = 0;
-float gearPositionVolts = 0;
-int gearButtonTriggered = true; // Used to ensure that a tactile button has to be released up, before the system handles the next button down event ("Click")
- 
-float battLevel;             // Volts
-float lastBattLevel = -0.1;  // Force initial update
-byte battReadError = 0;
-
-int LoopSleepTime = 5; // msec
-
-long lastForceLCDRefreshMillis = 0;
-
-// --------------------------------------------------------------------------
-
-// Utility for comparing floats
-#define EPSILON 0.01
-#define CompareFloats( a, b ) abs( a - b ) < EPSILON ? 1 : 0
-
-#define DIRECTION_LEFT 'L'
-#define DIRECTION_RIGHT 'R'
-
-// UI Labels
-#define GEAR_LABEL "Gear " 
-#define TEMPERATURE_LABEL "Temp "
-#define BATTERY_LABEL "Batt "
-#define Welcome1_Line1 "Stromputer-DL650"
-#define Welcome1_Line2 "\"White Pearl\""
-#define Welcome2_Line1 "F/W Ver="
-#define Welcome2_Line2 "Stromtrooper.com"
 
 /// --------------------------------------------------------------------------
 /// Arduino one-time setup routine - i.e. Program entry point like main()
@@ -238,12 +99,7 @@ void setup()
     // TODO: In future, control automatically and continously with light sensor
     lcd.setBacklight( lcdBackLight );
 
-    #ifdef SHOW_WELCOME
-    PrintWelcomeScreen(Welcome1_Line1, Welcome1_Line2, 600, 25, DIRECTION_RIGHT );
-    char line1[16] = Welcome2_Line1;
-    strcat( line1, VERSION );
-    PrintWelcomeScreen(line1, Welcome2_Line2, 600, 25, DIRECTION_LEFT );
-    #endif
+    showWelcome();
     
     setupDS1631();
 
@@ -259,7 +115,9 @@ void setup()
     pinMode(MANUAL_GEAR_UP_PIN, INPUT);      
     #endif
     
-    setupTimerInterrupt();  
+    // setupTimerInterrupt();  
+    Timer1.initialize( 62.5 * 1000 ); // set a timer to 62.5 milliseconds (or 16Hz)
+    Timer1.attachInterrupt( timerISR ); // attach the service routine here
 }
 
 
@@ -308,8 +166,6 @@ void MainLoopTimedAction()
     #endif
     
     PrintGearPosition();
-    
-    
 }
 
 int timerDivider = 0;
@@ -318,7 +174,7 @@ int timerDivider = 0;
 /// Timer compare Interrupt Service Routine (ISR)
 /// Note: Setup to run on 16Hz (62.5msec)
 /// --------------------------------------------------------------------------
-ISR( TIMER1_COMPA_vect )          
+void timerISR()
 {
     // Handle main board blinking at 1Hz for each toggle
     if ( timerDivider % 16 == 1 ) 
@@ -333,8 +189,8 @@ ISR( TIMER1_COMPA_vect )
     // Update Gear Position LEDs (note: updateGearLEDs() is optimized to only actually refresh on gear change)
     updateGearLEDs();
     
-    // Handle neutral gear blinking, at 2Hz for each toggle
-    if ( timerDivider % 8 == 1  && 
+    // Handle neutral gear blinking, at 4Hz for each toggle
+    if ( timerDivider % 4 == 1  && 
          gear == GEAR_NEUTRAL )
     {
         // Toggle 1st led Gear, for signaling rider the gear is N
@@ -344,7 +200,11 @@ ISR( TIMER1_COMPA_vect )
     timerDivider++;
 }
 
-
+/// --------------------------------------------------------------------------
+/// Handle reading the gear position, using one of the modes:
+///   Emulation - Use breadboard tactile buttons
+///   Analog    - Use analog-to-digital read from Motorcycles's Gear Position Sensor voltage
+/// --------------------------------------------------------------------------
 void HandleGearPositionRead()
 {
     #ifndef PCF8591_READ    
@@ -410,36 +270,6 @@ void ProcessTemperature()
 {
     ReadTemperature();
     PrintTemperature();   
-}
-
-
-
-
-
-/// ----------------------------------------------------------------------------------------------------
-/// Prints the welcome screen using the given two lines arguments
-/// ----------------------------------------------------------------------------------------------------
-void PrintWelcomeScreen( char *line1, char *line2, int showDelay, int scrollDelay, char scrollDirection )
-{
-    // Print line 1
-    lcd.print( line1 );       
-    // Print line 2
-    lcd.setCursor( 1,0 );
-    lcd.print(line2 );       
-
-    delay( showDelay );
-
-    // Scroll Left or Right, based on the scrollDirection argument
-    int i2cScrollCommand = ( scrollDirection == DIRECTION_LEFT ) ? LCD_I2C_NHD_SCROLL_LEFT : LCD_I2C_NHD_SCROLL_RIGHT;
-    
-    // Shift screen right
-    for ( int i = 0; i < LCD_COLS; i++ )
-    {    
-        lcd.command( i2cScrollCommand );
-        delay( scrollDelay );
-    }
-    
-    lcd.clear();
 }
 
 
@@ -758,7 +588,6 @@ void PrintTemperature()
 }
 
 
-
 /// ----------------------------------------------------------------------------------------------------
 /// Formats a float to a string. A workaround to sprintf not working on arduino (produces "?")
 /// Source: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1164927646
@@ -776,7 +605,6 @@ char *formatFloat(char *buffer, double floatValue, int precision)
   itoa(decimals, buffer, 10);
   return ret;
 }
- 
  
  
 /// ------------------------------------------------------------
@@ -865,25 +693,6 @@ void testGearLEDs()
 }
 
 /// --------------------------------------------------------------------------
-/// Setup the Timer Interrupt
-/// --------------------------------------------------------------------------
-void setupTimerInterrupt()
-{
-    // initialize timer1 in CTC model for 16Hz
-    noInterrupts();           // disable all interrupts
-    TCCR1A = 0;
-    TCCR1B = 0;
-    TCNT1  = 0;
-    
-    OCR1A = 15625 / 16;            // compare match register 16MHz/256/ ( 1Hz / 16 ), i.e. 16Hz or 62.5msec
-    TCCR1B |= (1 << WGM12);   // CTC mode
-    TCCR1B |= (1 << CS12);    // 256 prescaler 
-    TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
-    interrupts();             // enable all interrupts
-}
-
-
-/// --------------------------------------------------------------------------
 /// Setup the DS 1631 Temperature Sensor (I2C IC)
 /// --------------------------------------------------------------------------
 void setupDS1631()
@@ -913,4 +722,39 @@ void setupDS1631()
   Wire.endTransmission();
 }
 
+void showWelcome()
+{
+    #ifdef SHOW_WELCOME
+    printWelcomeScreen(Welcome1_Line1, Welcome1_Line2, 600, 25, DIRECTION_RIGHT );
+    char line1[16] = Welcome2_Line1;
+    strcat( line1, VERSION );
+    printWelcomeScreen(line1, Welcome2_Line2, 600, 25, DIRECTION_LEFT );
+    #endif
+}
+
+/// ----------------------------------------------------------------------------------------------------
+/// Prints the welcome screen using the given two lines arguments
+/// ----------------------------------------------------------------------------------------------------
+void printWelcomeScreen( char *line1, char *line2, int showDelay, int scrollDelay, char scrollDirection )
+{
+    // Print line 1
+    lcd.print( line1 );       
+    // Print line 2
+    lcd.setCursor( 1,0 );
+    lcd.print(line2 );       
+
+    delay( showDelay );
+
+    // Scroll Left or Right, based on the scrollDirection argument
+    int i2cScrollCommand = ( scrollDirection == DIRECTION_LEFT ) ? LCD_I2C_NHD_SCROLL_LEFT : LCD_I2C_NHD_SCROLL_RIGHT;
+    
+    // Shift screen right
+    for ( int i = 0; i < LCD_COLS; i++ )
+    {    
+        lcd.command( i2cScrollCommand );
+        delay( scrollDelay );
+    }
+    
+    lcd.clear();
+}
 

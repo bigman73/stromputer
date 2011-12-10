@@ -61,6 +61,12 @@ bool LED::getState()
   return status;
 }
 
+// YN 12/9/2011
+void LED::setState( bool newState )
+{
+	newState ? on() : off();
+}
+	
 /*
 || @description
 || | Set this LED on

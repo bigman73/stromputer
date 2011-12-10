@@ -34,6 +34,8 @@ class LED
     LED(uint8_t ledPin);
 
     bool getState();
+	// YN 12/9/2011
+    void setState( bool newState );
     void on();
     void off();
     void toggle();

@@ -35,6 +35,10 @@
 // []     0.10 - 12/3/2011, Stable Prototype, first version in Google Code/SVN
 // []     0.11 - 12/4/2011, Added gear led logic in software, refactored code to use ISR for main board blink and gear neutral blinking led, changed welcome screen
 // []     0.12 - 12/5/2011, Added direct gear emulation (tactile button)
+// []     0.13 - 12/9/2011, Added gear led boot test. Last version compatible with Arduino 0023 before moving to Arduino 1.0
+// []
+// []
+// []     **** Compatible with ARDUINO: 0023 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
@@ -43,7 +47,8 @@
 // ISR: http://letsmakerobots.com/node/28278
 // Light Sensors: http://www.ladyada.net/learn/sensors/cds.html
 
-#define VERSION "0.12"
+
+#define VERSION "0.14"
 
 #include <Wire.h>
 #include <inttypes.h>
@@ -56,22 +61,26 @@
 // http://www.arduino.cc/playground/Code/TimedAction
 #include <TimedAction.h>
 
+// Include 3rd Party library - LED (Modified by Yuval Naveh)
+#include <LED.h>
+
+
 #define SERIAL_SPEED 9600
 
 // ---------------- Timed Actions (Scheduled Events) -------------
 // Timed action for processing battery level
-TimedAction battLevelTimedAction = TimedAction( 2000, ProcessBatteryLevel );
+TimedAction battLevelTimedAction = TimedAction( -999999, 2000, ProcessBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
 // Timed action for processing temperature
-TimedAction temperatureTimedAction = TimedAction( 5000, ProcessTemperature );
+TimedAction temperatureTimedAction = TimedAction( -999999, 5000, ProcessTemperature );
 // Timed action for Main Sampling/Display Loop
-TimedAction mainLoopTimedAction = TimedAction( 50, MainLoopTimedAction );
+TimedAction mainLoopTimedAction = TimedAction( -999999, 50, MainLoopTimedAction );
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable serial debugging info (tracing)
 // #define SERIAL_DEBUG
 
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
-#define SHOW_WELCOME
+// #define SHOW_WELCOME
 
 // Comment in/out to enable/disable printing the gear volts
 #define DEBUG_PRINT_GEARVOLTS
@@ -158,9 +167,12 @@ int lcdBackLight = 2; // Default initial LCD back light
 // Note: 6 Digital outputs will be used for Gear LEDs - from GEAR1_LED_PIN .. GEAR1_LED_PIN + 5 (inclusive), for a total of 6 pins, each pin dedicated to a gear respectively.
 #define GEAR_BASE_LED_PIN 2
 
-int ledGears[6] = { LOW, LOW, LOW, LOW, LOW, LOW };
+LED ledGears[6] = { LED( GEAR_BASE_LED_PIN ), LED( GEAR_BASE_LED_PIN + 1 ), LED( GEAR_BASE_LED_PIN + 2 ), \
+                    LED( GEAR_BASE_LED_PIN + 3 ), LED( GEAR_BASE_LED_PIN + 4 ), LED( GEAR_BASE_LED_PIN + 5 ) };
 
-#define BOARD_LED_PIN 13
+// create a LED object at with the default on-board LED
+LED onBoardLed = LED();
+
 
 #define IsBetween( x, a, b ) ( x >= a && x <= b ? 1 : 0 )
 
@@ -189,6 +201,8 @@ byte battReadError = 0;
 
 int LoopSleepTime = 5; // msec
 
+long lastForceLCDRefreshMillis = 0;
+
 // --------------------------------------------------------------------------
 
 // Utility for comparing floats
@@ -215,9 +229,8 @@ void setup()
     // Setup Serial connection
     Serial.begin( SERIAL_SPEED );
     Serial.print("------- V-Strom Mk1B, VERSION: "); Serial.println(VERSION);
-    
-    pinMode( BOARD_LED_PIN, OUTPUT );
-    digitalWrite( BOARD_LED_PIN, HIGH );  
+
+    onBoardLed.on();    
      
     lcd.init();                          // Init the display, clears the display
 
@@ -226,42 +239,29 @@ void setup()
     lcd.setBacklight( lcdBackLight );
 
     #ifdef SHOW_WELCOME
-    PrintWelcomeScreen(Welcome1_Line1, Welcome1_Line2, 1000, 25, DIRECTION_RIGHT );
+    PrintWelcomeScreen(Welcome1_Line1, Welcome1_Line2, 600, 25, DIRECTION_RIGHT );
     char line1[16] = Welcome2_Line1;
     strcat( line1, VERSION );
-    PrintWelcomeScreen(line1, Welcome2_Line2, 1000, 25, DIRECTION_LEFT );
+    PrintWelcomeScreen(line1, Welcome2_Line2, 600, 25, DIRECTION_LEFT );
     #endif
     
-    SetupDS1631();
+    setupDS1631();
 
     #ifdef PCF8591_READ
         Serial.print( "===>     PCF8591_READ" );
-    #endif
-    
-    // Set the digital pins of gears LEDs as output (starting at 
-    for ( int gearLedPin = GEAR_BASE_LED_PIN; gearLedPin < GEAR_BASE_LED_PIN + 6; gearLedPin++ )
-    {
-        pinMode( gearLedPin, OUTPUT);     
-    }
-    
+    #endif  
+
+    testGearLEDs();
+    	
     // sets the digital pin of gear tacktile button as input
     #ifdef MANUAL_GEAR_EMULATION
     pinMode(MANUAL_GEAR_DOWN_PIN, INPUT);      
     pinMode(MANUAL_GEAR_UP_PIN, INPUT);      
     #endif
     
-    // initialize timer1 in CTC model for 16Hz
-    noInterrupts();           // disable all interrupts
-    TCCR1A = 0;
-    TCCR1B = 0;
-    TCNT1  = 0;
-    
-    OCR1A = 15625 / 16;            // compare match register 16MHz/256/ ( 1Hz / 16 ), i.e. 16Hz or 62.5msec
-    TCCR1B |= (1 << WGM12);   // CTC mode
-    TCCR1B |= (1 << CS12);    // 256 prescaler 
-    TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
-    interrupts();             // enable all interrupts
+    setupTimerInterrupt();  
 }
+
 
 /// --------------------------------------------------------------------------
 /// Arduino loop routine - gets called all the time in an infinite loop
@@ -281,6 +281,18 @@ void loop()
 /// --------------------------------------------------------------------------
 void MainLoopTimedAction()
 {
+    // TODO: Force full screen refresh every 15 seconds (some unknown bug with NHD LCD causes it to clear the screen from time to time)
+    if ( millis() - lastForceLCDRefreshMillis > 15000 )
+    {
+        #ifdef SERIAL_DEBUG 
+        Serial.println( "** FORCE REFRESH LCD DISPLAY **" );
+        #endif
+        lastTemperature = -99;    
+        lastBattLevel  = -1;    
+        lastGearLCD = -2;    
+        lastForceLCDRefreshMillis = millis();
+    }
+    
     // Timed Actions ("Events")
     battLevelTimedAction.check();       
     temperatureTimedAction.check();
@@ -296,41 +308,37 @@ void MainLoopTimedAction()
     #endif
     
     PrintGearPosition();
+    
+    
 }
 
-int mainBoardLedValue = LOW;
 int timerDivider = 0;
-int neutralGearLedValue = LOW;
-
 
 /// --------------------------------------------------------------------------
 /// Timer compare Interrupt Service Routine (ISR)
 /// Note: Setup to run on 16Hz (62.5msec)
 /// --------------------------------------------------------------------------
-ISR(TIMER1_COMPA_vect)          
+ISR( TIMER1_COMPA_vect )          
 {
     // Handle main board blinking at 1Hz for each toggle
     if ( timerDivider % 16 == 1 ) 
     {
         /// Toggle the Main Board LED
-        mainBoardLedValue = ( mainBoardLedValue == LOW ) ? HIGH : LOW;
-        // Write main board led pin
-        digitalWrite( BOARD_LED_PIN, mainBoardLedValue );  
+        onBoardLed.toggle();
     }
 
     // Handle gear position read
     HandleGearPositionRead();
 
-    // Update Gear Position LEDs (note: UpdateGearLEDs() is optimized to only actually refresh on gear change)
-    UpdateGearLEDs();
+    // Update Gear Position LEDs (note: updateGearLEDs() is optimized to only actually refresh on gear change)
+    updateGearLEDs();
     
     // Handle neutral gear blinking, at 2Hz for each toggle
     if ( timerDivider % 8 == 1  && 
          gear == GEAR_NEUTRAL )
     {
         // Toggle 1st led Gear, for signaling rider the gear is N
-        neutralGearLedValue = ( neutralGearLedValue == LOW ) ?  HIGH : LOW;
-        digitalWrite( GEAR_BASE_LED_PIN, neutralGearLedValue );   // sets the 1st LED status
+        ledGears[ 0 ].toggle();
     }    
 
     timerDivider++;
@@ -404,39 +412,6 @@ void ProcessTemperature()
     PrintTemperature();   
 }
 
-
-
-/// --------------------------------------------------------------------------
-/// Setup the DS 1631 Temperature Sensor (I2C IC)
-/// --------------------------------------------------------------------------
-void SetupDS1631()
-{
-   // Stop conversion to be able to modify "Access Config" Register
-  Wire.beginTransmission( DS1631_I2C_ADDRESS );
-  Wire.send((int)( DS1631_I2C_COMMAND_STOP_CONVERT )); // Stop conversion
-  Wire.endTransmission();  
-    
-  // Read "Access Config" regsiter
-  
-  Wire.beginTransmission(DS1631_I2C_ADDRESS);
-  Wire.send((int)( DS1631_I2C_COMMAND_ACCESS_CONFIG ));
-  Wire.endTransmission();
-  Wire.requestFrom( DS1631_I2C_ADDRESS,1 ); // Read 1 byte
-  Wire.available();
-  int AC = Wire.receive(); // receive a byte
-    
-  // WRITE into "Access Config" Register
-  Wire.beginTransmission(DS1631_I2C_ADDRESS);
-  Wire.send( DS1631_I2C_COMMAND_ACCESS_CONFIG );
-  Wire.send( DS1631_I2C_CONTROLBYTE_CONT_12BIT ); // Continuous conversion & 12 bits resolution
-  Wire.endTransmission();
-  
-
-  // START conversion to get T°
-  Wire.beginTransmission(DS1631_I2C_ADDRESS);
-  Wire.send((int)(0x51)); // Start Conversion
-  Wire.endTransmission();
-}
 
 
 
@@ -671,7 +646,7 @@ void PrintGearPosition()
 /// Updates the gear LEDs with current gear position (only if there has been a change)
 /// Note: Netural is blinking and is therefore being handled with a timer ISR, by NeutralGearLedBlink() 
 /// ----------------------------------------------------------------------------------------------------
-void UpdateGearLEDs()
+void updateGearLEDs()
 {
     // Optimization: Don't print the gear position if nothing has changed since the last printing
     if ( !gearReadError && ( lastGearLED == gear ) )
@@ -683,19 +658,14 @@ void UpdateGearLEDs()
 
     // TODO: Different algorithms are possible - e.g. each gear has its own led, or incremental, or incremental with top gear (6th) lighting alone
     // Currently option 3 is implemented. 
-    ledGears[1-1] = (gear < 6);
-    ledGears[2-1] = (gear >= 2 && gear < 6);
-    ledGears[3-1] = (gear >= 3 && gear < 6);
-    ledGears[4-1] = (gear >= 4 && gear < 6);
-    ledGears[5-1] = (gear >= 5 && gear < 6);
-    ledGears[6-1] = (gear == 6);
-        
+    
     // Update each gear led
-    for ( int gearLed = 1; gearLed <= 6; gearLed++ )
-    {
-        // sets the gear LED status
-        digitalWrite( GEAR_BASE_LED_PIN + gearLed - 1, ledGears[ gearLed - 1 ] );   
-    }
+    ledGears[1-1].setState( gear < 6 );
+    ledGears[2-1].setState( gear >= 2 && gear < 6 );
+    ledGears[3-1].setState( gear >= 3 && gear < 6 );
+    ledGears[4-1].setState( gear >= 4 && gear < 6 );
+    ledGears[5-1].setState( gear >= 5 && gear < 6 );
+    ledGears[6-1].setState( gear == 6 );
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -866,4 +836,81 @@ int ControlPCF8591_I2C(byte dac_value, byte adc_values[], byte adcChannelMask )
     
     return 1;
 }    
+
+/// ------------------------------------------------------------
+/// Tests the gear LEDs
+/// ------------------------------------------------------------
+void testGearLEDs()
+{
+    for ( int i=0; i < 3; i++ )
+    {
+        // Light left most and right most, then 'move' towards the center with two leds at a time
+        ledGears[ 0 ].on();
+        ledGears[ 5 ].on();
+        
+        delay( 200 );
+        ledGears[ 0 ].off();
+        ledGears[ 5 ].off();
+        ledGears[ 1 ].on();
+        ledGears[ 4 ].on();
+        delay( 200 );
+        ledGears[ 1 ].off();
+        ledGears[ 4 ].off();
+        ledGears[ 2 ].on();
+        ledGears[ 3 ].on();
+        delay( 200 );
+        ledGears[ 2 ].off();
+        ledGears[ 3 ].off();
+    }
+}
+
+/// --------------------------------------------------------------------------
+/// Setup the Timer Interrupt
+/// --------------------------------------------------------------------------
+void setupTimerInterrupt()
+{
+    // initialize timer1 in CTC model for 16Hz
+    noInterrupts();           // disable all interrupts
+    TCCR1A = 0;
+    TCCR1B = 0;
+    TCNT1  = 0;
+    
+    OCR1A = 15625 / 16;            // compare match register 16MHz/256/ ( 1Hz / 16 ), i.e. 16Hz or 62.5msec
+    TCCR1B |= (1 << WGM12);   // CTC mode
+    TCCR1B |= (1 << CS12);    // 256 prescaler 
+    TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
+    interrupts();             // enable all interrupts
+}
+
+
+/// --------------------------------------------------------------------------
+/// Setup the DS 1631 Temperature Sensor (I2C IC)
+/// --------------------------------------------------------------------------
+void setupDS1631()
+{
+   // Stop conversion to be able to modify "Access Config" Register
+  Wire.beginTransmission( DS1631_I2C_ADDRESS );
+  Wire.send((int)( DS1631_I2C_COMMAND_STOP_CONVERT )); // Stop conversion
+  Wire.endTransmission();  
+    
+  // READ "Access Config" regsiter
+  Wire.beginTransmission(DS1631_I2C_ADDRESS);
+  Wire.send((int)( DS1631_I2C_COMMAND_ACCESS_CONFIG ));
+  Wire.endTransmission();
+  Wire.requestFrom( DS1631_I2C_ADDRESS,1 ); // Read 1 byte
+  Wire.available();
+  int AC = Wire.receive(); // receive a byte
+    
+  // WRITE into "Access Config" Register
+  Wire.beginTransmission(DS1631_I2C_ADDRESS);
+  Wire.send( DS1631_I2C_COMMAND_ACCESS_CONFIG );
+  Wire.send( DS1631_I2C_CONTROLBYTE_CONT_12BIT ); // Continuous conversion & 12 bits resolution
+  Wire.endTransmission();
+
+  // START conversion to get T°
+  Wire.beginTransmission(DS1631_I2C_ADDRESS);
+  Wire.send((int)(0x51)); // Start Conversion
+  Wire.endTransmission();
+}
+
 

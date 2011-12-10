@@ -6,7 +6,7 @@
 // #define SERIAL_DEBUG
 
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
-// #define SHOW_WELCOME
+#define SHOW_WELCOME
 
 // Comment in/out to enable/disable printing the gear volts
 #define DEBUG_PRINT_GEARVOLTS
@@ -63,20 +63,20 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 // ----------------------------------------------------------------------------------------
 
 // ^^^^^^^^^^^   Gear mapping voltage values ^^^^^^^^^^^
-#define GEAR1_FROM_VOLTS 1.33f - 0.3f
-#define GEAR1_TO_VOLTS   1.33f + 0.2f
-#define GEAR2_FROM_VOLTS 1.77f - 0.2f
-#define GEAR2_TO_VOLTS   1.77f + 0.35f
-#define GEAR3_FROM_VOLTS 2.50f - 0.40f
-#define GEAR3_TO_VOLTS   2.50f + 0.4f
-#define GEAR4_FROM_VOLTS 3.23f - 0.3f
-#define GEAR4_TO_VOLTS   3.23f + 0.4f
-#define GEAR5_FROM_VOLTS 4.10f - 0.4f
-#define GEAR5_TO_VOLTS   4.10f + 0.25f
-#define GEAR6_FROM_VOLTS 4.55f - 0.2f
-#define GEAR6_TO_VOLTS   4.55f + 0.25f
-#define GEARN_FROM_VOLTS 5.00f - 0.24f
-#define GEARN_TO_VOLTS   5.00f + 0.5f
+#define GEAR1_FROM_VOLTS 1.33f - 0.30f
+#define GEAR1_TO_VOLTS   1.33f + 0.17f
+#define GEAR2_FROM_VOLTS 1.77f - 0.17f
+#define GEAR2_TO_VOLTS   1.77f + 0.30f
+#define GEAR3_FROM_VOLTS 2.50f - 0.30f
+#define GEAR3_TO_VOLTS   2.50f + 0.30f
+#define GEAR4_FROM_VOLTS 3.23f - 0.30f
+#define GEAR4_TO_VOLTS   3.23f + 0.35f
+#define GEAR5_FROM_VOLTS 4.10f - 0.35f
+#define GEAR5_TO_VOLTS   4.10f + 0.20f
+#define GEAR6_FROM_VOLTS 4.55f - 0.20f
+#define GEAR6_TO_VOLTS   4.55f + 0.20f
+#define GEARN_FROM_VOLTS 5.00f - 0.20f
+#define GEARN_TO_VOLTS   5.00f + 0.50f
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 #define GEAR_NEUTRAL 0
@@ -146,8 +146,6 @@ long lastForceLCDRefreshMillis = 0;
 #define TEMPERATURE_LABEL "Temp "
 #define BATTERY_LABEL "Batt "
 #define Welcome1_Line1 "Stromputer-DL650"
-#define Welcome1_Line2 "\"White Pearl\""
-#define Welcome2_Line1 "F/W Ver="
-#define Welcome2_Line2 "Stromtrooper.com"
+#define Welcome1_Line2 "F/W Ver="
 
 #endif

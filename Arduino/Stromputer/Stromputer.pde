@@ -50,7 +50,7 @@
 // ISR: http://letsmakerobots.com/node/28278
 // Light Sensors: http://www.ladyada.net/learn/sensors/cds.html
 
-#define VERSION "0.15"
+#define VERSION "0.16"
 
 #include <Wire.h>
 #include <inttypes.h>
@@ -100,14 +100,15 @@ void setup()
     lcd.setBacklight( lcdBackLight );
 
     showWelcome();
-    
+    testGearLEDs();
+   
     setupDS1631();
 
     #ifdef PCF8591_READ
         Serial.print( "===>     PCF8591_READ" );
     #endif  
 
-    testGearLEDs();
+ 
     	
     // sets the digital pin of gear tacktile button as input
     #ifdef MANUAL_GEAR_EMULATION
@@ -115,7 +116,6 @@ void setup()
     pinMode(MANUAL_GEAR_UP_PIN, INPUT);      
     #endif
     
-    // setupTimerInterrupt();  
     Timer1.initialize( 62.5 * 1000 ); // set a timer to 62.5 milliseconds (or 16Hz)
     Timer1.attachInterrupt( timerISR ); // attach the service routine here
 }
@@ -160,7 +160,7 @@ void MainLoopTimedAction()
     #else
         #ifdef PCF8591_GEAR_EMULATOR
         // NOTE: DEBUG MODE ONLY - AUTO INCREMENTS EMULATOR OUTPUT VOLTAGE (Used for gear emulation)
-        dac_value += 4;
+        dac_value += 1;
         ControlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 ); // Output DAC, ADC from channel 1
         #endif
     #endif
@@ -377,7 +377,7 @@ void ReadGearPositionAnalog()
     gearReadError = true; // Assume read had errors, by default
    
     int value = analogRead( ANALOGPIN_GEAR_POSITION );
-
+    
     #ifdef SERIAL_DEBUG
     Serial.print( "*** gear value: " ); Serial.println( value ); 
     #endif
@@ -409,8 +409,6 @@ void DetermineCurrentGear()
          gear = GEAR_NEUTRAL;  // Neutral
      else
          gear = GEAR_ERROR; // Default: Error
-         
-    // gear = 2;
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -441,8 +439,9 @@ void PrintGearPosition()
         
     // Print Gear Position Label
     lcd.setCursor( 0, 6 );
-    // TODO: RESTORE ONCE GEAR IS STABLE
-    //lcd.print( GEAR_LABEL );      
+    #ifndef DEBUG_PRINT_GEARVOLTS
+    lcd.print( GEAR_LABEL );      
+    #endif
     
     // Print Gear Position Value
     String gearValue;
@@ -489,13 +488,16 @@ void updateGearLEDs()
     // TODO: Different algorithms are possible - e.g. each gear has its own led, or incremental, or incremental with top gear (6th) lighting alone
     // Currently option 3 is implemented. 
     
-    // Update each gear led
-    ledGears[1-1].setState( gear < 6 );
-    ledGears[2-1].setState( gear >= 2 && gear < 6 );
-    ledGears[3-1].setState( gear >= 3 && gear < 6 );
-    ledGears[4-1].setState( gear >= 4 && gear < 6 );
-    ledGears[5-1].setState( gear >= 5 && gear < 6 );
-    ledGears[6-1].setState( gear == 6 );
+    // Update each gear led, only if not in error mode
+    if ( gear != GEAR_ERROR )
+    {
+        ledGears[1-1].setState( gear < 6 );
+        ledGears[2-1].setState( gear >= 2 && gear < 6 );
+        ledGears[3-1].setState( gear >= 3 && gear < 6 );
+        ledGears[4-1].setState( gear >= 4 && gear < 6 );
+        ledGears[5-1].setState( gear >= 5 && gear < 6 );
+        ledGears[6-1].setState( gear == 6 );
+    }
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -670,23 +672,23 @@ int ControlPCF8591_I2C(byte dac_value, byte adc_values[], byte adcChannelMask )
 /// ------------------------------------------------------------
 void testGearLEDs()
 {
-    for ( int i=0; i < 3; i++ )
+    for ( int i=0; i < 2; i++ )
     {
         // Light left most and right most, then 'move' towards the center with two leds at a time
         ledGears[ 0 ].on();
         ledGears[ 5 ].on();
         
-        delay( 200 );
+        delay( 100 );
         ledGears[ 0 ].off();
         ledGears[ 5 ].off();
         ledGears[ 1 ].on();
         ledGears[ 4 ].on();
-        delay( 200 );
+        delay( 100 );
         ledGears[ 1 ].off();
         ledGears[ 4 ].off();
         ledGears[ 2 ].on();
         ledGears[ 3 ].on();
-        delay( 200 );
+        delay( 100 );
         ledGears[ 2 ].off();
         ledGears[ 3 ].off();
     }
@@ -725,10 +727,9 @@ void setupDS1631()
 void showWelcome()
 {
     #ifdef SHOW_WELCOME
-    printWelcomeScreen(Welcome1_Line1, Welcome1_Line2, 600, 25, DIRECTION_RIGHT );
-    char line1[16] = Welcome2_Line1;
-    strcat( line1, VERSION );
-    printWelcomeScreen(line1, Welcome2_Line2, 600, 25, DIRECTION_LEFT );
+    char line2[16] = Welcome1_Line2;
+    strcat( line2, VERSION );
+    printWelcomeScreen(Welcome1_Line1, line2, 800, 25, DIRECTION_RIGHT );
     #endif
 }
 

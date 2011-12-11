@@ -21,7 +21,17 @@ LCDi2cNHD(uint8_t num_lines, uint8_t num_col, int i2c_address, uint8_t display);
 	
 	void setDelay(int,int);
 	
+	// **************************************************************************
+// 12/9/2011, YUVAL NAVEH - Patched to compile with Arduino 1.0, 
+//                            as well as older Arudino (e.g. 0023)
+// **************************************************************************
+#if (ARDUINO >= 100)
+	virtual size_t write(uint8_t);
+#else
 	virtual void write(uint8_t);
+#endif
+// **************************************************************************
+// **************************************************************************
 	
 	void clear();
 	

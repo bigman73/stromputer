@@ -3,10 +3,22 @@
 
 #include <inttypes.h>
 
-#include "WConstants.h"  //all things wiring / arduino
+// **************************************************************************
+// 12/11/2011, YUVAL NAVEH - Patched to compile with Arduino 1.0, 
+//                            as well as older Arudino (e.g. 0023)
+// **************************************************************************
+#if (ARDUINO >= 100)
+	#include <Arduino.h>
+	#define __Wire_write Wire.write
+#else
+	#include "WConstants.h"  //all things wiring / arduino
+	#define __Wire_write Wire.send
+#endif
+// **************************************************************************
+// **************************************************************************
   
 #include "LCDi2cNHD.h"
-  
+
 
 #define _LCDEXPANDED				// If defined turn on advanced functions
 
@@ -97,8 +109,8 @@ void LCDi2cNHD::setDelay (int cmdDelay,int charDelay) {
 void LCDi2cNHD::command(uint8_t value) {
 
   Wire.beginTransmission(g_i2caddress);
-  Wire.send(0xFE);
-  Wire.send(value);
+  __Wire_write(0xFE);
+  __Wire_write(value);
   Wire.endTransmission();
   delay(g_cmdDelay);
 }
@@ -114,15 +126,35 @@ void LCDi2cNHD::command(uint8_t value) {
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
 
+// **************************************************************************
+// 12/12/2011, YUVAL NAVEH - Patched to compile with Arduino 1.0, 
+//                            as well as older Arudino (e.g. 0023)
+// **************************************************************************
+#if (ARDUINO >= 100)
+
+size_t LCDi2cNHD::write(uint8_t value) {
+
+  Wire.beginTransmission(g_i2caddress);
+  __Wire_write(value);
+  Wire.endTransmission();
+  delay(g_charDelay);
+
+  return 0;
+}
+#else
 
 void LCDi2cNHD::write(uint8_t value) {
 
   Wire.beginTransmission(g_i2caddress);
-  Wire.send(value);
+  __Wire_write(value);
   Wire.endTransmission();
   delay(g_charDelay);
-
 }
+
+#endif
+// **************************************************************************
+// **************************************************************************
+
 
 
 
@@ -267,9 +299,9 @@ void LCDi2cNHD::setCursor(uint8_t line_num, uint8_t x){
       if (line_num == 3)
           base = 0x54;
       Wire.beginTransmission(g_i2caddress);
-      Wire.send(0xFE);
-      Wire.send(0x45);
-      Wire.send(base + x);
+      __Wire_write(0xFE);
+      __Wire_write(0x45);
+      __Wire_write(base + x);
       Wire.endTransmission();
       delay(g_cmdDelay*2);
 
@@ -311,11 +343,11 @@ void LCDi2cNHD::load_custom_character(uint8_t char_num, uint8_t *rows)
 
 
 	Wire.beginTransmission(g_i2caddress);
-	Wire.send(0xFE);
-	Wire.send(0x54);
-	Wire.send(char_num);
+	__Wire_write(0xFE);
+	__Wire_write(0x54);
+	__Wire_write(char_num);
 	for (uint8_t i = 0 ; i < 8 ; i++)
-		Wire.send(rows[i]);
+		__Wire_write(rows[i]);
 	Wire.endTransmission();
 	delay(g_cmdDelay);
 }
@@ -327,9 +359,9 @@ void LCDi2cNHD::setBacklight(uint8_t new_val)
 {
 	
 	Wire.beginTransmission(g_i2caddress);
-	Wire.send(0xFE);
-	Wire.send(0x53);
-	Wire.send(new_val);
+	__Wire_write(0xFE);
+	__Wire_write(0x53);
+	__Wire_write(new_val);
 	Wire.endTransmission();
 	delay(g_cmdDelay);
 
@@ -340,9 +372,9 @@ void LCDi2cNHD::setContrast(uint8_t new_val)
 {
 	
 	Wire.beginTransmission(g_i2caddress);
-	Wire.send(0xFE);
-	Wire.send(0x52);
-	Wire.send(new_val);
+	__Wire_write(0xFE);
+	__Wire_write(0x52);
+	__Wire_write(new_val);
 	Wire.endTransmission();
 	delay(g_cmdDelay);
 }

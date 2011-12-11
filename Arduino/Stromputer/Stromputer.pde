@@ -75,11 +75,11 @@
 
 // ---------------- Timed Actions (Scheduled Events) -------------
 // Timed action for processing battery level
-TimedAction battLevelTimedAction = TimedAction( -999999, 2000, ProcessBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
+TimedAction battLevelTimedAction = TimedAction( -999999, 2000, processBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
 // Timed action for processing temperature
-TimedAction temperatureTimedAction = TimedAction( -999999, 5000, ProcessTemperature );
+TimedAction temperatureTimedAction = TimedAction( -999999, 5000, processTemperature );
 // Timed action for Main Sampling/Display Loop
-TimedAction mainLoopTimedAction = TimedAction( -999999, 50, MainLoopTimedAction );
+TimedAction mainLoopTimedAction = TimedAction( -999999, 50, mainLoop );
 
 
 /// --------------------------------------------------------------------------
@@ -100,15 +100,12 @@ void setup()
     lcd.setBacklight( lcdBackLight );
 
     showWelcome();
-    testGearLEDs();
    
     setupDS1631();
 
     #ifdef PCF8591_READ
         Serial.print( "===>     PCF8591_READ" );
     #endif  
-
- 
     	
     // sets the digital pin of gear tacktile button as input
     #ifdef MANUAL_GEAR_EMULATION
@@ -137,7 +134,7 @@ void loop()
 ///         timed scheduling, due to use of the TimedAction mechanism. In stock main
 ///          loop a typical sleep is needed, which is avoided here.
 /// --------------------------------------------------------------------------
-void MainLoopTimedAction()
+void mainLoop()
 {
     // TODO: Force full screen refresh every 15 seconds (some unknown bug with NHD LCD causes it to clear the screen from time to time)
     if ( millis() - lastForceLCDRefreshMillis > 15000 )
@@ -156,16 +153,16 @@ void MainLoopTimedAction()
     temperatureTimedAction.check();
 
     #ifdef PCF8591_READ
-         ReadBatteryAndGearPositionPCF8591();
+         readBatteryAndGearPositionPCF8591();
     #else
         #ifdef PCF8591_GEAR_EMULATOR
         // NOTE: DEBUG MODE ONLY - AUTO INCREMENTS EMULATOR OUTPUT VOLTAGE (Used for gear emulation)
         dac_value += 1;
-        ControlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 ); // Output DAC, ADC from channel 1
+        controlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 ); // Output DAC, ADC from channel 1
         #endif
     #endif
     
-    PrintGearPosition();
+    printGearPosition();
 }
 
 int timerDivider = 0;
@@ -184,7 +181,7 @@ void timerISR()
     }
 
     // Handle gear position read
-    HandleGearPositionRead();
+    handleGearPositionRead();
 
     // Update Gear Position LEDs (note: updateGearLEDs() is optimized to only actually refresh on gear change)
     updateGearLEDs();
@@ -205,7 +202,7 @@ void timerISR()
 ///   Emulation - Use breadboard tactile buttons
 ///   Analog    - Use analog-to-digital read from Motorcycles's Gear Position Sensor voltage
 /// --------------------------------------------------------------------------
-void HandleGearPositionRead()
+void handleGearPositionRead()
 {
     #ifndef PCF8591_READ    
         #ifdef MANUAL_GEAR_EMULATION
@@ -244,7 +241,7 @@ void HandleGearPositionRead()
                 }
             }
         #else    
-            ReadGearPositionAnalog();          
+            readGearPositionAnalog();          
         #endif
     #endif
 }
@@ -253,23 +250,23 @@ void HandleGearPositionRead()
 /// Timed Action Event handler for battLevelTimedAction - 
 ///     Processes the battery level
 /// --------------------------------------------------------------------------
-void ProcessBatteryLevel()
+void processBatteryLevel()
 {   
     #ifndef PCF8591_READ
-    ReadBatteryLevelAnalog();
+    readBatteryLevelAnalog();
     #endif
     
-    PrintBatteryLevel();
+    printBatteryLevel();
 }
 
 /// --------------------------------------------------------------------------
 /// Timed Action Event handler for temperatureTimedAction - 
 //     Processes the ambient temperature
 /// --------------------------------------------------------------------------
-void ProcessTemperature()
+void processTemperature()
 {
-    ReadTemperature();
-    PrintTemperature();   
+    readTemperature();
+    printTemperature();   
 }
 
 
@@ -277,12 +274,12 @@ void ProcessTemperature()
 /// Reads the battery and gear position from the PCF8591 DAC/ADC I2C IC
 //  Note: Was used for debug. Not in use.
 /// ----------------------------------------------------------------------------------------------------
-void ReadBatteryAndGearPositionPCF8591()
+void readBatteryAndGearPositionPCF8591()
 {
     battReadError = true; // Assume read had errors, by default
     gearReadError = true; // Assume read had errors, by default
     
-    if ( !ControlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 | PCF8591_MASK_CHANNEL1 | PCF8591_MASK_CHANNEL2 | PCF8591_MASK_CHANNEL3 ) )
+    if ( !controlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 | PCF8591_MASK_CHANNEL1 | PCF8591_MASK_CHANNEL2 | PCF8591_MASK_CHANNEL3 ) )
     {
         return;
     }
@@ -290,7 +287,7 @@ void ReadBatteryAndGearPositionPCF8591()
     battLevel = 4.0f * 5.0f * ( float ) all_adc_values[ 3 ] / 255;  // 4.0f = Volt Divider of 4:1 (20V -> 5V, using a 120K/39Kohm volt divider), 5.0f = VREF
     gearPositionVolts  = 2.0f * 5.0f * ( float ) all_adc_values[ 0 ] / 255; // 2.0f = Volt Divider of 2:1 (10V -> 5V, using a 47K/47K volt divider), 5.0f = VREF
 
-    DetermineCurrentGear();
+    determineCurrentGear();
              
     battReadError = false; // Clear read error - we made it here
     gearReadError = false; // Clear read error - we made it here
@@ -301,7 +298,7 @@ void ReadBatteryAndGearPositionPCF8591()
 /// ----------------------------------------------------------------------------------------------------
 /// Reads the current battery level from the voltage divider circuit (4:1, 20V -> 5V), using Arduino ADC
 /// ----------------------------------------------------------------------------------------------------
-void ReadBatteryLevelAnalog()
+void readBatteryLevelAnalog()
 {
     battReadError = true; // Assume read had errors, by default
 
@@ -315,7 +312,7 @@ void ReadBatteryLevelAnalog()
 /// ----------------------------------------------------------------------------------------------------
 /// Print the current battery level (only if there has been a changed)
 /// ----------------------------------------------------------------------------------------------------
-void PrintBatteryLevel()
+void printBatteryLevel()
 {
     // Optimization: Don't print the battery level if nothing has changed since the last printing
     if ( !battReadError && ( CompareFloats( lastBattLevel, battLevel )  ) )
@@ -372,7 +369,7 @@ void PrintBatteryLevel()
 // ----------------------------------------------------------------------------------------------------
 /// Reads the current gear position level from the voltage divider circuit (2:1, 10V -> 5V), using Arduino ADC
 /// ----------------------------------------------------------------------------------------------------
-void ReadGearPositionAnalog()
+void readGearPositionAnalog()
 {
     gearReadError = true; // Assume read had errors, by default
    
@@ -383,7 +380,7 @@ void ReadGearPositionAnalog()
     #endif
     
     gearPositionVolts = 2.0f * 5.0f * ( value / 1024.0f );    // read the input pin for Gear Position
-    DetermineCurrentGear();
+    determineCurrentGear();
     
     gearReadError = false; // Clear read error - we made it here
 }
@@ -391,7 +388,7 @@ void ReadGearPositionAnalog()
 // ----------------------------------------------------------------------------------------------------
 /// Determins the current gear from the gear position volts
 /// ----------------------------------------------------------------------------------------------------
-void DetermineCurrentGear()
+void determineCurrentGear()
 {
      if ( IsBetween( gearPositionVolts, GEAR1_FROM_VOLTS, GEAR1_TO_VOLTS ) )
          gear = 1;
@@ -414,7 +411,7 @@ void DetermineCurrentGear()
 /// ----------------------------------------------------------------------------------------------------
 /// Print the current gear position (only if there has been a change)
 /// ----------------------------------------------------------------------------------------------------
-void PrintGearPosition()
+void printGearPosition()
 {
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     #ifdef DEBUG_PRINT_GEARVOLTS
@@ -503,7 +500,7 @@ void updateGearLEDs()
 /// ----------------------------------------------------------------------------------------------------
 /// Reads the current temperature from the I2C DS1631 Thermometer 
 /// ----------------------------------------------------------------------------------------------------
-void ReadTemperature()
+void readTemperature()
 {   
     temperatureReadError = true; // Assume read had errors, by default
     
@@ -541,7 +538,7 @@ void ReadTemperature()
 /// ----------------------------------------------------------------------------------------------------
 /// Print the current temperature (only if it has been a changed)
 /// ----------------------------------------------------------------------------------------------------
-void PrintTemperature()
+void printTemperature()
 {
     // Optimization: Don't print the temperature if nothing has changed since the last printing
     if ( !temperatureReadError && ( lastTemperature == temperature ) )
@@ -616,7 +613,7 @@ char *formatFloat(char *buffer, double floatValue, int precision)
 ///    adc_values - An output array of bytes where the results of ADC conversion will be stored, per channel
 ///    adcChannelMask - A mask for the ADC Input channel mask
 /// ------------------------------------------------------------
-int ControlPCF8591_I2C(byte dac_value, byte adc_values[], byte adcChannelMask )
+int controlPCF8591_I2C(byte dac_value, byte adc_values[], byte adcChannelMask )
 {
     int dacValueSent = 0;
     
@@ -724,13 +721,18 @@ void setupDS1631()
   Wire.endTransmission();
 }
 
+/// ----------------------------------------------------------------------------------------------------
+/// Show the welcome sequence
+/// ----------------------------------------------------------------------------------------------------
 void showWelcome()
 {
     #ifdef SHOW_WELCOME
     char line2[16] = Welcome1_Line2;
     strcat( line2, VERSION );
     printWelcomeScreen(Welcome1_Line1, line2, 800, 25, DIRECTION_RIGHT );
-    #endif
+
+    testGearLEDs();
+    #endif    
 }
 
 /// ----------------------------------------------------------------------------------------------------

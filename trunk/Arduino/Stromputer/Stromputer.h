@@ -14,11 +14,11 @@
 // Comment in/out to enable/disable PCF8591 ADC Read/Arduino Analog Read
 /// #define PCF8591_READ
 
-// Comment in/out to enable/disable PCF8591 DAC Gear Emulation
-// #define PCF8591_GEAR_EMULATOR
+// Comment in/out to enable/disable PCF8591 DAC Gear Emulation (Automatic increment from 0..5V in loops)
+#define PCF8591_GEAR_EMULATOR
 
 // Comment in/out to enable/disable manual gear emulation (using two tactile buttons)
-#define MANUAL_GEAR_EMULATION
+// #define MANUAL_GEAR_EMULATION
 
 // Temperature mode - F or C
 #define TEMPERATURE_MODE 'F'

@@ -32,7 +32,7 @@
 #define LCD_I2C_NHD_SCROLL_LEFT 0x55
 #define LCD_I2C_NHD_SCROLL_RIGHT 0x56
 
-int lcdBackLight = 2; // Default initial LCD back light
+int lcdBackLight = 4; // Default initial LCD back light
 
 // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
 LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
@@ -63,7 +63,8 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 // ----------------------------------------------------------------------------------------
 
 // ^^^^^^^^^^^   Gear mapping voltage values ^^^^^^^^^^^
-#define GEAR1_FROM_VOLTS 1.33f - 0.30f
+// Note: DL-650 gear shows 0V on 1st gear, when bike engine is off, but switch is on. Only when engaged to N for first time, then the 1st gear reading becomes 1.33.
+#define GEAR1_FROM_VOLTS 0.00f
 #define GEAR1_TO_VOLTS   1.33f + 0.17f
 #define GEAR2_FROM_VOLTS 1.77f - 0.17f
 #define GEAR2_TO_VOLTS   1.77f + 0.30f

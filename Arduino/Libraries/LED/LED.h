@@ -23,7 +23,18 @@
 #ifndef LED_H
 #define LED_H
 
-#include "WProgram.h"
+// **************************************************************************
+// 12/11/2011, YUVAL NAVEH - Patched to compile with Arduino 1.0, 
+//                            as well as older Arudino (e.g. 0023)
+// **************************************************************************
+#if (ARDUINO >= 100)
+#include <Arduino.h>
+#else
+#include <WProgram.h>
+#endif
+// **************************************************************************
+// **************************************************************************
+
 
 #define ARDUINO_ON_BOARD_LED_PIN 13
 

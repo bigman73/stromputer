@@ -1,6 +1,8 @@
 #ifndef Stromputer_H
 #define Stromputer_H
 
+#define VERSION "0.18"
+
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable serial debugging info (tracing)
 // #define SERIAL_DEBUG
@@ -11,14 +13,11 @@
 // Comment in/out to enable/disable printing the gear volts
 #define DEBUG_PRINT_GEARVOLTS
 
-// Comment in/out to enable/disable PCF8591 ADC Read/Arduino Analog Read
-/// #define PCF8591_READ
-
 // Comment in/out to enable/disable PCF8591 DAC Gear Emulation (Automatic increment from 0..5V in loops)
 #define PCF8591_GEAR_EMULATOR
 
 // Comment in/out to enable/disable manual gear emulation (using two tactile buttons)
-// #define MANUAL_GEAR_EMULATION
+#define MANUAL_GEAR_EMULATION
 
 // Temperature mode - F or C
 #define TEMPERATURE_MODE 'F'
@@ -32,7 +31,8 @@
 #define LCD_I2C_NHD_SCROLL_LEFT 0x55
 #define LCD_I2C_NHD_SCROLL_RIGHT 0x56
 
-int lcdBackLight = 4; // Default initial LCD back light
+byte lcdBackLight = 4; // Default initial LCD back light
+byte lastLcdBackLight = 4;
 
 // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
 LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
@@ -93,6 +93,8 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 #define ANALOGPIN_BATT_LEVEL 0
 // Gear Position (2:1 voltage divider) is connected to Analog Pin 1
 #define ANALOGPIN_GEAR_POSITION 1
+// Photocell level (3K-11K:10K voltage divider) is connected to Analog Pin 2
+#define ANALOGPIN_PHOTCELL 2
 
 // Note: 6 Digital outputs will be used for Gear LEDs - from GEAR1_LED_PIN .. GEAR1_LED_PIN + 5 (inclusive), for a total of 6 pins, each pin dedicated to a gear respectively.
 #define GEAR_BASE_LED_PIN 2
@@ -128,6 +130,8 @@ int gearButtonTriggered = true; // Used to ensure that a tactile button has to b
 float battLevel;             // Volts
 float lastBattLevel = -0.1;  // Force initial update
 byte battReadError = 0;
+
+int photoCellLevel;
 
 int LoopSleepTime = 5; // msec
 

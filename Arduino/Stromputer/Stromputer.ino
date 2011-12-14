@@ -42,6 +42,7 @@
 // []     0.15 - 12/10/2011, + Changed custom Timer ISR to TimerOne library, Refactored all constants and variables to Stromputer.h header file
 // []     0.16 - 12/10/2011, + Code refactoring, naming conventions
 // []     0.17 - 12/10/2011 + Moved to Arduino 1.0 (.ino), Main loop slowed down to refersh on 4Hz
+// []     0.18 - 12/13/2011 + Add Photo Cell read/Automatic LCD Backlight Adjustment
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -50,8 +51,6 @@
 // DS1631: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1221926830
 // ISR: http://letsmakerobots.com/node/28278
 // Light Sensors: http://www.ladyada.net/learn/sensors/cds.html
-
-#define VERSION "0.17"
 
 #include <Wire.h>
 #include <inttypes.h>
@@ -79,6 +78,8 @@
 TimedAction battLevelTimedAction = TimedAction( -999999, 2000, processBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
 // Timed action for processing temperature
 TimedAction temperatureTimedAction = TimedAction( -999999, 2000, processTemperature );
+// Timed action for processing photo cell light 
+TimedAction photoCellTimedAction = TimedAction( -999999, 1000, processPhotoCell );
 // Timed action for Sampling & LCD Display
 TimedAction lcdDisplayTimedAction = TimedAction( -999999, 250, lcdDisplayLoop );
 
@@ -102,10 +103,6 @@ void setup()
     showWelcome();
    
     setupDS1631();
-
-    #ifdef PCF8591_READ
-        Serial.print( "===>     PCF8591_READ" );
-    #endif  
     	
     // sets the digital pin of gear tacktile button as input
     #ifdef MANUAL_GEAR_EMULATION
@@ -139,6 +136,7 @@ void lcdDisplayLoop()
         #ifdef SERIAL_DEBUG 
         Serial.println( "** FORCE REFRESH LCD DISPLAY **" );
         #endif
+        // TODO: Use flags instead of reseting last values
         lastTemperature = -99;    
         lastBattLevel  = -1;    
         lastGearLCD = -2;    
@@ -148,15 +146,12 @@ void lcdDisplayLoop()
     // Timed Actions ("Events")
     battLevelTimedAction.check();       
     temperatureTimedAction.check();
+    photoCellTimedAction.check();
 
-    #ifdef PCF8591_READ
-         readBatteryAndGearPositionPCF8591();
-    #else
-        #ifdef PCF8591_GEAR_EMULATOR
-        // NOTE: DEBUG MODE ONLY - AUTO INCREMENTS EMULATOR OUTPUT VOLTAGE (Used for gear emulation)
-        dac_value += 1;
-        controlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 ); // Output DAC, ADC from channel 1
-        #endif
+    #ifdef PCF8591_GEAR_EMULATOR
+    // NOTE: DEBUG MODE ONLY - AUTO INCREMENTS EMULATOR OUTPUT VOLTAGE (Used for gear emulation)
+    dac_value += 1;
+    controlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 ); // Output DAC, ADC from channel 1
     #endif
     
     printGearPosition();
@@ -201,45 +196,43 @@ void timerISR()
 /// --------------------------------------------------------------------------
 void handleGearPositionRead()
 {
-    #ifndef PCF8591_READ    
-        #ifdef MANUAL_GEAR_EMULATION
-            // read the input pin for Gear Up button
-            int manualButtonValue = digitalRead(MANUAL_GEAR_UP_PIN);
+    #ifdef MANUAL_GEAR_EMULATION
+        // read the input pin for Gear Up button
+        int manualButtonValue = digitalRead(MANUAL_GEAR_UP_PIN);
+        if ( manualButtonValue == BUTTON_DOWN )
+        {
+            if ( gearButtonTriggered )
+            {
+                gear++;
+                gearButtonTriggered = false;
+            
+                if ( gear > 6 )
+                    gear = GEAR_NEUTRAL;
+            }
+        }
+        else
+        {
+            // read the input pin for Gear Down button
+            manualButtonValue = digitalRead(MANUAL_GEAR_DOWN_PIN);
             if ( manualButtonValue == BUTTON_DOWN )
             {
                 if ( gearButtonTriggered )
                 {
-                    gear++;
+                    gear--;
                     gearButtonTriggered = false;
-                
-                    if ( gear > 6 )
-                        gear = GEAR_NEUTRAL;
+            
+                    if ( gear < 0)
+                        gear = 6;
                 }
             }
+            // Both buttons are UP, therefore are considered triggered
             else
             {
-                // read the input pin for Gear Down button
-                manualButtonValue = digitalRead(MANUAL_GEAR_DOWN_PIN);
-                if ( manualButtonValue == BUTTON_DOWN )
-                {
-                    if ( gearButtonTriggered )
-                    {
-                        gear--;
-                        gearButtonTriggered = false;
-                
-                        if ( gear < 0)
-                            gear = 6;
-                    }
-                }
-                // Both buttons are UP, therefore are considered triggered
-                else
-                {
-                    gearButtonTriggered = true;
-                }
+                gearButtonTriggered = true;
             }
-        #else    
-            readGearPositionAnalog();          
-        #endif
+        }
+    #else    
+        readGearPositionAnalog();          
     #endif
 }
 
@@ -249,53 +242,19 @@ void handleGearPositionRead()
 /// --------------------------------------------------------------------------
 void processBatteryLevel()
 {   
-    #ifndef PCF8591_READ
     readBatteryLevelAnalog();
     
     // When 'live' on the motorcycle, there is a 0.49V difference between what Arduino samples and what a volt meter samples.
     // TODO: Figure out the difference, probably due to a diode somewhere
     // As a temporary workaround, 0.49V are added as a constant
-    battLevel += 0.49f;
-    #endif
+    // battLevel += 0.49f;
     
     printBatteryLevel();
 }
 
-/// --------------------------------------------------------------------------
-/// Timed Action Event handler for temperatureTimedAction - 
-//     Processes the ambient temperature
-/// --------------------------------------------------------------------------
-void processTemperature()
-{
-    readTemperature();
-    printTemperature();   
-}
 
-
-/// ----------------------------------------------------------------------------------------------------
-/// Reads the battery and gear position from the PCF8591 DAC/ADC I2C IC
-//  Note: Was used for debug. Not in use.
-/// ----------------------------------------------------------------------------------------------------
-void readBatteryAndGearPositionPCF8591()
-{
-    battReadError = true; // Assume read had errors, by default
-    gearReadError = true; // Assume read had errors, by default
-    
-    if ( !controlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 | PCF8591_MASK_CHANNEL1 | PCF8591_MASK_CHANNEL2 | PCF8591_MASK_CHANNEL3 ) )
-    {
-        return;
-    }
-     
-    battLevel = 4.0f * 5.0f * ( float ) all_adc_values[ 3 ] / 255;  // 4.0f = Volt Divider of 4:1 (20V -> 5V, using a 120K/39Kohm volt divider), 5.0f = VREF
-    gearPositionVolts  = 2.0f * 5.0f * ( float ) all_adc_values[ 0 ] / 255; // 2.0f = Volt Divider of 2:1 (10V -> 5V, using a 47K/47K volt divider), 5.0f = VREF
-
-    determineCurrentGear();
-             
-    battReadError = false; // Clear read error - we made it here
-    gearReadError = false; // Clear read error - we made it here
-}
-
-
+float battLevel0 = 0;
+float battLevel1 = 0;
 
 /// ----------------------------------------------------------------------------------------------------
 /// Reads the current battery level from the voltage divider circuit (4:1, 20V -> 5V), using Arduino ADC
@@ -305,7 +264,22 @@ void readBatteryLevelAnalog()
     battReadError = true; // Assume read had errors, by default
 
     int value = analogRead( ANALOGPIN_BATT_LEVEL );    // read the input pin for Battery Level
-    battLevel = 4.0f * 5.0f * ( value / 1024.0f );
+    
+    // Keep a moving time window of 3 readings
+    float battLevel2 = battLevel1;
+    battLevel1 = battLevel0;
+    battLevel0 = 4.05f * 4.9f * ( value / 1024.0f );
+    
+    if ( battLevel1 == 0 || battLevel2 == 0 )
+    {
+        // Disable moving window, for initial readings until they stabilize    
+        battLevel = battLevel0; 
+    }
+    else
+    {
+        // Calculate average voltage, using time window
+        battLevel = ( battLevel0 + battLevel1 + battLevel2 ) / 3.0f;
+    }
         
     battReadError = false; // Clear read error - we made it here
     
@@ -367,6 +341,59 @@ void printBatteryLevel()
     lcd.print( battLevelValue );
 }
 
+
+/// --------------------------------------------------------------------------
+/// Timed Action Event handler for photoCellTimedAction - 
+///     Processes the photo cell level and adjust LCD Back Light accordingly
+/// --------------------------------------------------------------------------
+void processPhotoCell()
+{   
+    readPhotoCellAnalog();
+   
+    // Determine new LCD Back Light level (1..8, 1 is very dim .. 8 is very bright)
+    if ( photoCellLevel < 50 )
+        lcdBackLight = 1; // Very dim
+    else if ( photoCellLevel < 200 )
+        lcdBackLight = 2;
+    else if ( photoCellLevel < 500 )
+        lcdBackLight = 3;
+    else if ( photoCellLevel < 725 )
+        lcdBackLight = 4;
+    else if ( photoCellLevel < 825 )
+        lcdBackLight = 5;
+    else if ( photoCellLevel < 900 )
+        lcdBackLight = 6;
+    else if ( photoCellLevel < 975 )
+        lcdBackLight = 7;
+    else
+        lcdBackLight = 8; // Very bright
+     
+    // Only update the LCD backlight if there is actually a change (to reduce costly I2C traffic)
+    if ( lcdBackLight != lastLcdBackLight )
+    {
+         lastLcdBackLight = lcdBackLight;
+         
+        #ifdef SERIAL_DEBUG
+         Serial.print( "LCD Back Light changed: "); Serial.println( lcdBackLight );
+         #endif
+         
+         lcd.setBacklight( lcdBackLight );
+    }      
+}
+
+/// ----------------------------------------------------------------------------------------------------
+/// Reads the current photo cell level from the voltage divider circuit (3K-11K : 10K), using Arduino ADC
+/// ----------------------------------------------------------------------------------------------------
+void readPhotoCellAnalog()
+{
+    int value = analogRead( ANALOGPIN_PHOTCELL );    // read the input pin for Photo Cell Level
+    
+    #ifdef SERIAL_DEBUG
+    Serial.print( "Photo cell raw value: "); Serial.println( value );
+    #endif
+    
+    photoCellLevel =  value;
+}
 
 // ----------------------------------------------------------------------------------------------------
 /// Reads the current gear position level from the voltage divider circuit (2:1, 10V -> 5V), using Arduino ADC
@@ -499,6 +526,17 @@ void updateGearLEDs()
     }
 }
 
+
+/// --------------------------------------------------------------------------
+/// Timed Action Event handler for temperatureTimedAction - 
+//     Processes the ambient temperature
+/// --------------------------------------------------------------------------
+void processTemperature()
+{
+    readTemperature();
+    printTemperature();   
+}
+
 /// ----------------------------------------------------------------------------------------------------
 /// Reads the current temperature from the I2C DS1631 Thermometer 
 /// ----------------------------------------------------------------------------------------------------
@@ -565,7 +603,7 @@ void printTemperature()
     else if ( temperature < -50 )
     {
         // Workaround when there are odd readings on first seconds when temperature sensor is starting up
-        temperatureValue = " ---";
+        temperatureValue = " ----";
     }
     else
     {

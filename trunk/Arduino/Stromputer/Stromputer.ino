@@ -41,8 +41,9 @@
 // []                       + Fixed TimedAction to trigger immediately when sketch starts
 // []     0.15 - 12/10/2011, + Changed custom Timer ISR to TimerOne library, Refactored all constants and variables to Stromputer.h header file
 // []     0.16 - 12/10/2011, + Code refactoring, naming conventions
-// []     0.17 - 12/10/2011 + Moved to Arduino 1.0 (.ino), Main loop slowed down to refersh on 4Hz
+// []     0.17 - 12/10/2011 + Moved to Arduino 1.0 (.ino), Main loop slowed down to refersh on 4Hz, removed obsolete PCF8591 gear read logic
 // []     0.18 - 12/13/2011 + Add Photo Cell read/Automatic LCD Backlight Adjustment
+// []     0.19 - 12/XX/2011 + Fixed forced refresh
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -130,16 +131,15 @@ void loop()
 /// --------------------------------------------------------------------------
 void lcdDisplayLoop()
 {
-    // TODO: Force full screen refresh every 5 seconds (some unknown bug with NHD LCD causes it to clear the screen from time to time)
-    if ( millis() - lastForceLCDRefreshMillis > 5000 )
+    // Force full screen refresh every X seconds (some unknown bug with NHD LCD causes it to clear the screen from time to time)
+    if ( millis() - lastForceLCDRefreshMillis > LCD_FORCEREFRESH_INTERVAL )
     {
         #ifdef SERIAL_DEBUG 
         Serial.println( "** FORCE REFRESH LCD DISPLAY **" );
         #endif
-        // TODO: Use flags instead of reseting last values
-        lastTemperature = -99;    
-        lastBattLevel  = -1;    
-        lastGearLCD = -2;    
+        isForceRefreshTemp = true;
+        isForceRefreshBatt = true;
+        isForceRefreshGear = true;
         lastForceLCDRefreshMillis = millis();
     }
     
@@ -290,10 +290,17 @@ void readBatteryLevelAnalog()
 /// ----------------------------------------------------------------------------------------------------
 void printBatteryLevel()
 {
-    // Optimization: Don't print the battery level if nothing has changed since the last printing
-    if ( !battReadError && ( CompareFloats( lastBattLevel, battLevel )  ) )
+    if ( isForceRefreshBatt )
     {
-        return;
+           isForceRefreshBatt = false;
+    }
+    else
+    {
+        // Optimization: Don't print the battery level if nothing has changed since the last printing
+        if ( !battReadError && ( CompareFloats( lastBattLevel, battLevel )  ) )
+        {
+            return;
+        }
     }
     
     // Keep the current battery level, to optimize display time
@@ -449,10 +456,16 @@ void printGearPosition()
     #endif
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    // Optimization: Don't print the gear position if nothing has changed since the last printing
-    if ( !gearReadError && ( lastGearLCD == gear ) )
+    if ( isForceRefreshGear )
     {
-        return;
+        isForceRefreshGear = false;
+    }
+    {
+        // Optimization: Don't print the gear position if nothing has changed since the last printing
+        if ( !gearReadError && ( lastGearLCD == gear ) )
+        {
+            return;
+        }
     }
 
     #ifdef SERIAL_DEBUG
@@ -580,10 +593,17 @@ void readTemperature()
 /// ----------------------------------------------------------------------------------------------------
 void printTemperature()
 {
-    // Optimization: Don't print the temperature if nothing has changed since the last printing
-    if ( !temperatureReadError && ( lastTemperature == temperature ) )
+    if ( isForceRefreshTemp )
     {
-        return;
+       isForceRefreshTemp = false;
+    }
+    else
+    {
+        // Optimization: Don't print the temperature if nothing has changed since the last printing
+        if ( !temperatureReadError && ( lastTemperature == temperature ) )
+        {
+            return;
+        }
     }
 
     // Keep the current gear position, to optimize display time

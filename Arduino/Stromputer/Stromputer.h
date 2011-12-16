@@ -1,7 +1,37 @@
 #ifndef Stromputer_H
 #define Stromputer_H
 
-#define VERSION "0.18"
+
+// [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
+// []
+// []   V-Strom Mk1B - An extra display for a Suzuki DL-650 ("V-Strom") that adds the following functionality:
+// []	  1. Battery Level display in Volts - e.g. 14.5V
+// []	  2. Gear Position Indicator on LCD - e.g. 1, 2, 3, 4, 5, 6, N
+// []	  3. Ambient Temperature in Farenheight or Celsius - e.g. 62.5F
+// []	  4. [Future] LED display of gear position (one led for each gear 1-6, in different colors, N will be blinking on 1)
+// []	  5. [Future] Accurate display of the fuel level (in percentage)
+// []     6. [Future] Show Fuel consumption - MPG or KM/L, TBD: need to tap into motorcycle's speed sensor (PWM)
+// []	  7. [Future] Fix the OEM V-Strom Fuel Gauge to become linear
+// []     License: GPL V3
+/*
+    Stromputer - Enhanced display for Suzuki V-Strom Motorcycles (DL-650, DL-1000, years 2004-2011)
+    Copyright (C) 2011 Yuval Naveh
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#define VERSION "0.19"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable serial debugging info (tracing)
@@ -32,7 +62,7 @@
 #define LCD_I2C_NHD_SCROLL_RIGHT 0x56
 
 byte lcdBackLight = 4; // Default initial LCD back light
-byte lastLcdBackLight = 4;
+byte lastLcdBackLight = 4; // Ranges in NHD LCD from 1..8 (Very Dim..Very Bright)
 
 // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
 LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
@@ -119,23 +149,29 @@ float temperature;  // Farenheit
 float lastTemperature = -99; // Force initial update
 byte temperatureReadError = 0;
 
-int gear = 0;               // 0 = Neutral, or 1-6
-int lastGearLCD = -2;          // Force initial update
-int lastGearLED = -2;       // Force initial update
+short gear = 0;               // 0 = Neutral, or 1-6
+short lastGearLCD = -2;          // Force initial update
+short lastGearLED = -2;       // Force initial update
 float gearVolts[] = { 5, 4.5, 4.8, 4.3 };
 byte gearReadError = 0;
 float gearPositionVolts = 0;
-int gearButtonTriggered = true; // Used to ensure that a tactile button has to be released up, before the system handles the next button down event ("Click")
+bool gearButtonTriggered = true; // Used to ensure that a tactile button has to be released up, before the system handles the next button down event ("Click")
  
 float battLevel;             // Volts
 float lastBattLevel = -0.1;  // Force initial update
 byte battReadError = 0;
 
-int photoCellLevel;
+short photoCellLevel;
 
-int LoopSleepTime = 5; // msec
+short LoopSleepTime = 5; // msec
+
+#define LCD_FORCEREFRESH_INTERVAL 5
 
 long lastForceLCDRefreshMillis = 0;
+
+bool isForceRefreshBatt = true;
+bool isForceRefreshGear = true;
+bool isForceRefreshTemp = true;
 
 // --------------------------------------------------------------------------
 

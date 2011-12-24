@@ -43,7 +43,7 @@
 // []     0.16 - 12/10/2011, + Code refactoring, naming conventions
 // []     0.17 - 12/10/2011 + Moved to Arduino 1.0 (.ino), Main loop slowed down to refersh on 4Hz, removed obsolete PCF8591 gear read logic
 // []     0.18 - 12/13/2011 + Add Photo Cell read/Automatic LCD Backlight Adjustment
-// []     0.19 - 12/XX/2011 + Fixed forced refresh
+// []     0.19 - 12/24/2011 + Fixed forced refresh, lcd back light value now using average (for smoothing), Fixed temperature error handling
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -74,13 +74,13 @@
 
 #include "Stromputer.h"
 
-// ---------------- Timed Actions (Scheduled Events) -------------
+// ---------------- Timed Actions (Scheduled re-occouring Events) -------------
 // Timed action for processing battery level
 TimedAction battLevelTimedAction = TimedAction( -999999, 2000, processBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
 // Timed action for processing temperature
 TimedAction temperatureTimedAction = TimedAction( -999999, 2000, processTemperature );
 // Timed action for processing photo cell light 
-TimedAction photoCellTimedAction = TimedAction( -999999, 1000, processPhotoCell );
+TimedAction photoCellTimedAction = TimedAction( -999999, 2000, processPhotoCell );
 // Timed action for Sampling & LCD Display
 TimedAction lcdDisplayTimedAction = TimedAction( -999999, 250, lcdDisplayLoop );
 
@@ -91,19 +91,19 @@ void setup()
 { 
     // Setup Serial connection
     Serial.begin( SERIAL_SPEED );
-    Serial.print("------- V-Strom Mk1B, VERSION: "); Serial.println(VERSION);
+    Serial.print("------- Stomputer, Firmware version: "); Serial.println(VERSION);
 
     onBoardLed.on();    
      
     lcd.init();                          // Init the display, clears the display
 
-    // Set initial backlight
-    // TODO: In future, control automatically and continously with light sensor
+    // Set initial LCD backlight & contrast
     lcd.setBacklight( lcdBackLight );
+    lcd.setContrast( lcdContrast );
 
     showWelcome();
    
-    setupDS1631();
+    initializeDS1631();
     	
     // sets the digital pin of gear tacktile button as input
     #ifdef MANUAL_GEAR_EMULATION
@@ -141,6 +141,10 @@ void lcdDisplayLoop()
         isForceRefreshBatt = true;
         isForceRefreshGear = true;
         lastForceLCDRefreshMillis = millis();
+        
+        battLevelTimedAction.force(); 
+        temperatureTimedAction.force();
+        photoCellTimedAction.force();
     }
     
     // Timed Actions ("Events")
@@ -148,7 +152,7 @@ void lcdDisplayLoop()
     temperatureTimedAction.check();
     photoCellTimedAction.check();
 
-    #ifdef PCF8591_GEAR_EMULATOR
+    #ifdef PCF8591_DAC_GEAR_EMULATOR
     // NOTE: DEBUG MODE ONLY - AUTO INCREMENTS EMULATOR OUTPUT VOLTAGE (Used for gear emulation)
     dac_value += 1;
     controlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 ); // Output DAC, ADC from channel 1
@@ -182,7 +186,7 @@ void timerISR()
     if ( timerDivider % 4 == 1  && 
          gear == GEAR_NEUTRAL )
     {
-        // Toggle 1st led Gear, for signaling rider the gear is N
+        // Toggle 1st led Gear On/Off, signaling the rider that the gear is N
         ledGears[ 0 ].toggle();
     }    
 
@@ -253,8 +257,8 @@ void processBatteryLevel()
 }
 
 
-float battLevel0 = 0;
-float battLevel1 = 0;
+float battLevel0 = 0; // last value
+float battLevel1 = 0; // value before last value (1st oldest value)
 
 /// ----------------------------------------------------------------------------------------------------
 /// Reads the current battery level from the voltage divider circuit (4:1, 20V -> 5V), using Arduino ADC
@@ -266,7 +270,7 @@ void readBatteryLevelAnalog()
     int value = analogRead( ANALOGPIN_BATT_LEVEL );    // read the input pin for Battery Level
     
     // Keep a moving time window of 3 readings
-    float battLevel2 = battLevel1;
+    float battLevel2 = battLevel1; // 2nd oldest value
     battLevel1 = battLevel0;
     battLevel0 = 4.05f * 4.9f * ( value / 1024.0f );
     
@@ -320,7 +324,7 @@ void printBatteryLevel()
     else
     {
         // Format battery float value
-        char formattedBattLevel[6];
+        char formattedBattLevel[5]; // DD.D + NULL => Maximum 5 characters
         formatFloat( formattedBattLevel, battLevel, 1 );
         String battFormattedString = formattedBattLevel;
 
@@ -348,7 +352,6 @@ void printBatteryLevel()
     lcd.print( battLevelValue );
 }
 
-
 /// --------------------------------------------------------------------------
 /// Timed Action Event handler for photoCellTimedAction - 
 ///     Processes the photo cell level and adjust LCD Back Light accordingly
@@ -360,31 +363,42 @@ void processPhotoCell()
     // Determine new LCD Back Light level (1..8, 1 is very dim .. 8 is very bright)
     if ( photoCellLevel < 50 )
         lcdBackLight = 1; // Very dim
-    else if ( photoCellLevel < 200 )
+    else if ( photoCellLevel < 250 )
         lcdBackLight = 2;
     else if ( photoCellLevel < 500 )
         lcdBackLight = 3;
-    else if ( photoCellLevel < 725 )
+    else if ( photoCellLevel < 700 )
         lcdBackLight = 4;
-    else if ( photoCellLevel < 825 )
+    else if ( photoCellLevel < 800 )
         lcdBackLight = 5;
     else if ( photoCellLevel < 900 )
         lcdBackLight = 6;
-    else if ( photoCellLevel < 975 )
+    else if ( photoCellLevel < 1000 )
         lcdBackLight = 7;
     else
         lcdBackLight = 8; // Very bright
-     
+
     // Only update the LCD backlight if there is actually a change (to reduce costly I2C traffic)
     if ( lcdBackLight != lastLcdBackLight )
-    {
-         lastLcdBackLight = lcdBackLight;
+    {   
+        #ifdef SERIAL_DEBUG
+            Serial.print( "LCD Back Light changed (initial): "); Serial.println( lcdBackLight );
+        #endif
+    
+        // if a large change, use a smoothing function (average) to reduce sharp/large changes
+        if ( abs( lcdBackLight - lastLcdBackLight ) > 1 )
+            lcdBackLight = ( lcdBackLight + lastLcdBackLight ) / 2;
+            
+        lastLcdBackLight = lcdBackLight;
          
         #ifdef SERIAL_DEBUG
-         Serial.print( "LCD Back Light changed: "); Serial.println( lcdBackLight );
-         #endif
+         Serial.print( "LCD Back Light changed (after AVG): "); Serial.println( lcdBackLight );
+        #endif
          
-         lcd.setBacklight( lcdBackLight );
+        lcd.setCursor( 0, 4 );
+        lcd.print( lcdBackLight );   
+
+        lcd.setBacklight( lcdBackLight );
     }      
 }
 
@@ -460,6 +474,7 @@ void printGearPosition()
     {
         isForceRefreshGear = false;
     }
+    else
     {
         // Optimization: Don't print the gear position if nothing has changed since the last printing
         if ( !gearReadError && ( lastGearLCD == gear ) )
@@ -477,8 +492,8 @@ void printGearPosition()
     lastGearLCD = gear;
         
     // Print Gear Position Label
-    lcd.setCursor( 0, 6 );
     #ifndef DEBUG_PRINT_GEARVOLTS
+    lcd.setCursor( 0, 6 );
     lcd.print( GEAR_LABEL );      
     #endif
     
@@ -486,7 +501,7 @@ void printGearPosition()
     String gearValue;
     if ( gearReadError )
     {
-        gearValue = "ERR";
+        gearValue = "ERR ";
     }
     else
     {
@@ -498,7 +513,7 @@ void printGearPosition()
         else
             gearValue.concat( gear );
     
-        gearValue.concat( "=" );
+        gearValue.concat( "= " );
     }
 
     lcd.setCursor(1,6);
@@ -534,8 +549,20 @@ void updateGearLEDs()
         ledGears[2-1].setState( gear >= 2 && gear < 6 );
         ledGears[3-1].setState( gear >= 3 && gear < 6 );
         ledGears[4-1].setState( gear >= 4 && gear < 6 );
-        ledGears[5-1].setState( gear >= 5 && gear < 6 );
-        ledGears[6-1].setState( gear == 6 );
+        ledGears[5-1].setState( gear == 5 );
+        ledGears[6-1].setState( gear == 6 ); 
+        
+        /// LED Layout: Gr  Gr   Yl  Wh  Wh  Bl
+        ///         LED: 1   2   3   4   5   6
+        ///  GEAR
+        ///  N:          B   -   -   -   -   -
+        ///  1:          X   -   -   -   -   -
+        ///  2:          X   X   -   -   -   -
+        ///  3:          X   X   X   -   -   -
+        ///  4:          X   X   X   X   -   -
+        ///  5:          X   X   X   X   X   -
+        ///  6:          -   -   -   -   -   X     Over Drive Mode: The last LED light on only when 6th gear is engaged
+        ///  B = Blink,   X = On,  - = Off
     }
 }
 
@@ -547,6 +574,24 @@ void updateGearLEDs()
 void processTemperature()
 {
     readTemperature();
+   
+    // Workaround to a problem with DS1631: From time to time, the IC goes nuts and starts returning odd readings (TODO: Check if related to pull up resistor values, or breadboard, or the generic IC socket
+    // Check if DS1631 is returning bad temperature vlaues (but not on boot last temperature is set to -99), if yes, re-establish communication with it
+    if ( !temperatureReadError && lastTemperature > -55 && abs( lastTemperature - temperature ) > 30 )
+    {
+        // Re-Initialize DS1631 - Stop temperature conversion, and start it again
+        initializeDS1631();
+        
+        // Now read temperature again
+        readTemperature();
+        
+        // If still there are odd readings then declare temperature error mode
+        if ( abs( lastTemperature - temperature ) > 30 )
+        {
+            temperatureReadError = true;
+        }
+    }
+
     printTemperature();   
 }
 
@@ -565,7 +610,7 @@ void readTemperature()
     int bytes;
     bytes = Wire.available(); // 1st byte
     if (bytes != 2)
-      return;
+        return;
     int _TH = Wire.read(); // receive a byte (TH - High Register)
     
     bytes = Wire.available(); // 2nd byte
@@ -584,6 +629,9 @@ void readTemperature()
     temperature = temperature * 9.0 / 5.0 + 32;
     
     #endif
+
+    // TODO: Change to ifdef once debugging is finished    
+    Serial.print( "Temp = " ); Serial.println( temperature ); 
     
     temperatureReadError = false; // Clear read error - we made it here
 }
@@ -600,7 +648,7 @@ void printTemperature()
     else
     {
         // Optimization: Don't print the temperature if nothing has changed since the last printing
-        if ( !temperatureReadError && ( lastTemperature == temperature ) )
+        if ( !temperatureReadError && ( CompareFloats( lastTemperature, temperature ) ) )
         {
             return;
         }
@@ -620,23 +668,22 @@ void printTemperature()
     {
         temperatureValue = " ERR  ";
     }
-    else if ( temperature < -50 )
+    else if ( temperature < -55 )
     {
         // Workaround when there are odd readings on first seconds when temperature sensor is starting up
         temperatureValue = " ----";
     }
     else
-    {
-        
-        // Pad to right if temperature is two digits (left of dot)
+    {   
+        // Pad one space, align to right if temperature is two digits (left of dot)
         if ( ( temperature > 10 && temperature < 100 ) || ( temperature < 0 && temperature > -10 ) )
             temperatureValue += " " ;
-        // Pad to right if temperature is one digits (left of dot)        
+        // Pad two spaces, align to right if temperature is one digit (left of dot)        
         else if ( temperature > 0 && temperature < 10 )
             temperatureValue += "  " ;
     
         // format temperature into a fixed .1 format (e.g. 62.5 or 114.4 [too hot to ride! :) ] or -10.7 [too cold to ride! :) ])
-        char formattedTemperature[6];
+        char formattedTemperature[7]; // DDD.DD + NULL => Maximum 7 characters
         formatFloat( formattedTemperature, temperature, 1 );
         temperatureValue += formattedTemperature;
         
@@ -655,22 +702,33 @@ void printTemperature()
 
 /// ----------------------------------------------------------------------------------------------------
 /// Formats a float to a string. A workaround to sprintf not working on arduino (produces "?")
-/// Source: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1164927646
+/// Based on source: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1164927646
 /// ----------------------------------------------------------------------------------------------------
-char *formatFloat(char *buffer, double floatValue, int precision)
+char *formatFloat( char *buffer, double floatValue, int precision )
 {
-  long precisionLongs[] = {0,10,100,1000,10000};
+  static long precisionLongs[] = {0,10,100,1000,10000};
   
-  char *ret = buffer;
-  long heiltal = (long) floatValue;
-  itoa(heiltal, buffer, 10);
+  // Keep the start of the output buffer
+  char *result = buffer;
+  
+  // write the integer part
+  long intPart = (long) floatValue;
+  itoa(intPart, buffer, 10);
   while (*buffer != '\0') buffer++;
+
+  // Append dot
   *buffer++ = '.';
-  long decimals = abs((long)((floatValue - heiltal) * precisionLongs[precision]));
+
+  // Append the fractional part with the requesed preceision
+  long decimals = abs((long)( (floatValue - intPart) * precisionLongs[ precision ] ));
   itoa(decimals, buffer, 10);
-  return ret;
+  
+  // Return the result buffer (pointer)
+  return result;
 }
  
+ 
+#ifdef PCF8591_DAC_GEAR_EMULATOR
  
 /// ------------------------------------------------------------
 /// Controls the PCF8591 IC through I2C protocol
@@ -729,6 +787,7 @@ int controlPCF8591_I2C(byte dac_value, byte adc_values[], byte adcChannelMask )
     
     return 1;
 }    
+#endif
 
 /// ------------------------------------------------------------
 /// Tests the gear LEDs
@@ -758,16 +817,18 @@ void testGearLEDs()
 }
 
 /// --------------------------------------------------------------------------
-/// Setup the DS 1631 Temperature Sensor (I2C IC)
+/// Initialize the DS 1631 Temperature Sensor (I2C IC)
 /// --------------------------------------------------------------------------
-void setupDS1631()
+void initializeDS1631()
 {
+  Serial.println( ">> Initializing DS1631" );
+  
    // Stop conversion to be able to modify "Access Config" Register
   Wire.beginTransmission( DS1631_I2C_ADDRESS );
   Wire.write((int)( DS1631_I2C_COMMAND_STOP_CONVERT )); // Stop conversion
   Wire.endTransmission();  
     
-  // READ "Access Config" regsiter
+  // READ "Access Config" register
   Wire.beginTransmission(DS1631_I2C_ADDRESS);
   Wire.write((int)( DS1631_I2C_COMMAND_ACCESS_CONFIG ));
   Wire.endTransmission();
@@ -783,7 +844,7 @@ void setupDS1631()
 
   // START conversion to get T°
   Wire.beginTransmission(DS1631_I2C_ADDRESS);
-  Wire.write((int)(0x51)); // Start Conversion
+  Wire.write((int) DS1631_I2C_COMMAND_START_CONVERT); // Start Conversion
   Wire.endTransmission();
 }
 

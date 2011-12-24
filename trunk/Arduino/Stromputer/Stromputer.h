@@ -44,7 +44,7 @@
 #define DEBUG_PRINT_GEARVOLTS
 
 // Comment in/out to enable/disable PCF8591 DAC Gear Emulation (Automatic increment from 0..5V in loops)
-#define PCF8591_GEAR_EMULATOR
+// #define PCF8591_DAC_GEAR_EMULATOR
 
 // Comment in/out to enable/disable manual gear emulation (using two tactile buttons)
 #define MANUAL_GEAR_EMULATION
@@ -63,6 +63,7 @@
 
 byte lcdBackLight = 4; // Default initial LCD back light
 byte lastLcdBackLight = 4; // Ranges in NHD LCD from 1..8 (Very Dim..Very Bright)
+byte lcdContrast = 50; // 0..50 (no contrast .. high contrast)
 
 // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
 LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
@@ -145,7 +146,7 @@ LED onBoardLed = LED();
 byte dac_value=0;     // output 0..255 -> 0-5V (or VSS..VREF)
 byte all_adc_values[4];   // Input 0..255 -> 0-5V  (or VSS..VREF)
 
-float temperature;  // Farenheit
+float temperature = 0;  // Farenheit
 float lastTemperature = -99; // Force initial update
 byte temperatureReadError = 0;
 
@@ -165,7 +166,8 @@ short photoCellLevel;
 
 short LoopSleepTime = 5; // msec
 
-#define LCD_FORCEREFRESH_INTERVAL 5
+// msec
+#define LCD_FORCEREFRESH_INTERVAL 5000
 
 long lastForceLCDRefreshMillis = 0;
 
@@ -184,8 +186,8 @@ bool isForceRefreshTemp = true;
 
 // UI Labels
 #define GEAR_LABEL "Gear " 
-#define TEMPERATURE_LABEL "Temp "
-#define BATTERY_LABEL "Batt "
+#define TEMPERATURE_LABEL "Temp  "
+#define BATTERY_LABEL "Batt  "
 #define Welcome1_Line1 "Stromputer-DL650"
 #define Welcome1_Line2 "F/W Ver="
 

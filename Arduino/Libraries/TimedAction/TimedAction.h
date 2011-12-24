@@ -56,6 +56,8 @@ class TimedAction {
 	void check();
 	
 	void setInterval( unsigned long interval );
+	// YN
+	void force();
 
   private: 
     bool active;

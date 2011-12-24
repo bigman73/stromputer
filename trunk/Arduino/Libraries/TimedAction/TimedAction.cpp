@@ -42,3 +42,9 @@ void TimedAction::check(){
 void TimedAction::setInterval( unsigned long intervl){
 	interval = intervl;
 }
+
+// YN 12/23/2011
+// Force an execute, next time action is checked
+void TimedAction::force(){
+    previous = millis() - interval;
+}

@@ -31,7 +31,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "0.19"
+#define VERSION "0.20"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable serial debugging info (tracing)
@@ -61,7 +61,7 @@
 #define LCD_I2C_NHD_SCROLL_LEFT 0x55
 #define LCD_I2C_NHD_SCROLL_RIGHT 0x56
 
-byte lcdBackLight = 4; // Default initial LCD back light
+byte lcdBackLight = 4; // LCD back light (brightness)
 byte lastLcdBackLight = 4; // Ranges in NHD LCD from 1..8 (Very Dim..Very Bright)
 byte lcdContrast = 50; // 0..50 (no contrast .. high contrast)
 
@@ -69,7 +69,6 @@ byte lcdContrast = 50; // 0..50 (no contrast .. high contrast)
 LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 
 // --------------------------------------------------------------------------
-
 
 // ----------------------- DS1631 I2C Thermometer ----------------------------------------
 #define DS1631_I2C_ADDRESS 0x90 >> 1
@@ -114,8 +113,8 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 #define GEAR_NEUTRAL 0
 #define GEAR_ERROR -1
 
-#define MANUAL_GEAR_DOWN_PIN 11
-#define MANUAL_GEAR_UP_PIN 12
+#define MANUAL_GEAR_DOWN_PIN 12
+#define MANUAL_GEAR_UP_PIN 8
 
 // Buttons are pulled up, so pressed is zero voltage or logical zero, released is VCC or logical on
 #define BUTTON_DOWN 0
@@ -127,12 +126,26 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 // Photocell level (3K-11K:10K voltage divider) is connected to Analog Pin 2
 #define ANALOGPIN_PHOTCELL 2
 
-// Note: 6 Digital outputs will be used for Gear LEDs - from GEAR1_LED_PIN .. GEAR1_LED_PIN + 5 (inclusive), for a total of 6 pins, each pin dedicated to a gear respectively.
-#define GEAR_BASE_LED_PIN 2
+// Note: 6 Digital outputs will be used for Gear LEDs - a total of 6 pins, each pin dedicated to a gear respectively. 
+//       All LEDs pins are PWM (to allow LED Dimming)
+// Gear    |    PIN     |    Wire Color   | LED Color
+// --------------------------------------------------
+// 1/N     |    3       |    Green        |  Green
+//  2      |    5       |    White/Green  |  Yellow
+//  3      |    6       |    Orange       |  Yellow
+//  4      |    9       |    White/Orange |  White
+//  5      |    10      |    White/Blue   |  White
+//  6      |    11      |    Blue         |  Blue
+//
+// Brown & White/Brown Wires = GND
 
-LED ledGears[6] = { LED( GEAR_BASE_LED_PIN ), LED( GEAR_BASE_LED_PIN + 1 ), LED( GEAR_BASE_LED_PIN + 2 ), \
-                    LED( GEAR_BASE_LED_PIN + 3 ), LED( GEAR_BASE_LED_PIN + 4 ), LED( GEAR_BASE_LED_PIN + 5 ) };
 
+LED ledGears[6] = { LED( 3 ), LED( 5 ), LED( 6 ), \
+                    LED( 9 ), LED( 10 ), LED( 11 ) };
+
+byte ledBrightness = 127; 
+byte ledBrightness1 = 5;  
+ 
 // create a LED object at with the default on-board LED
 LED onBoardLed = LED();
 

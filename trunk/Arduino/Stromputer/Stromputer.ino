@@ -111,7 +111,8 @@ void setup()
     pinMode(MANUAL_GEAR_UP_PIN, INPUT);      
     #endif
     
-    Timer1.initialize( 62.5 * 1000 ); // set a timer to 62.5 milliseconds (or 16Hz)
+    // set a timer to 62.5 milliseconds (or 16Hz)
+    Timer1.initialize( 1000 );  // 1000 microseconds = 1 msec = 1000hz
     Timer1.attachInterrupt( timerISR ); // attach the service routine here
 }
 
@@ -161,33 +162,38 @@ void lcdDisplayLoop()
     printGearPosition();
 }
 
-int timerDivider = 0;
+unsigned short int timerDivider = 0;
 
 /// --------------------------------------------------------------------------
 /// Timer compare Interrupt Service Routine (ISR)
-/// Note: Setup to run on 16Hz (62.5msec)
+/// Note: Setup to run on 1Khz (1msec)
 /// --------------------------------------------------------------------------
 void timerISR()
 {
     // Handle main board blinking at 1Hz for each toggle
-    if ( timerDivider % 16 == 1 ) 
+    if ( timerDivider % 1000 == 1 ) 
     {
         /// Toggle the Main Board LED
         onBoardLed.toggle();
     }
 
-    // Handle gear position read
-    handleGearPositionRead();
+    // Handle gears at 20Hz
+    if ( timerDivider % 50 == 1 ) 
+    {
+        // Handle gear position read
+        handleGearPositionRead();
 
-    // Update Gear Position LEDs (note: updateGearLEDs() is optimized to only actually refresh on gear change)
-    updateGearLEDs();
+        // Update Gear Position LEDs (note: updateGearLEDs() is optimized to only actually refresh on gear change)
+        updateGearLEDs();
+    }
     
     // Handle neutral gear blinking, at 4Hz for each toggle
-    if ( timerDivider % 4 == 1  && 
+    if ( timerDivider % 250 == 1  && 
          gear == GEAR_NEUTRAL )
     {
-        // Toggle 1st led Gear On/Off, signaling the rider that the gear is N
-        ledGears[ 0 ].toggle();
+        // Toggle 1st Gear LED On/Off (using PWM) , signaling the rider that the gear is N
+        // Note: LED::Toggle() doesn't work well, because it uses digitalWrite instead of analogWrite, thus doesn't use PWM and causes the LED to show with full brightness always
+        ledGears[ 0 ].setValue( ledGears[ 0 ].getState() ? 0 : ledBrightness1 ); // If last state was true, toggle it to true, and visa versa
     }    
 
     timerDivider++;
@@ -399,6 +405,8 @@ void processPhotoCell()
         lcd.print( lcdBackLight );   
 
         lcd.setBacklight( lcdBackLight );
+        
+        lastGearLED = -1; // Force update of LEDs
     }      
 }
 
@@ -462,7 +470,7 @@ void determineCurrentGear()
 /// Print the current gear position (only if there has been a change)
 /// ----------------------------------------------------------------------------------------------------
 void printGearPosition()
-{
+{    
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     #ifdef DEBUG_PRINT_GEARVOLTS
     lcd.setCursor( 0, 6 );
@@ -545,14 +553,19 @@ void updateGearLEDs()
     // Update each gear led, only if not in error mode
     if ( gear != GEAR_ERROR )
     {
-        ledGears[1-1].setState( gear < 6 );
-        ledGears[2-1].setState( gear >= 2 && gear < 6 );
-        ledGears[3-1].setState( gear >= 3 && gear < 6 );
-        ledGears[4-1].setState( gear >= 4 && gear < 6 );
-        ledGears[5-1].setState( gear == 5 );
-        ledGears[6-1].setState( gear == 6 ); 
+        ledBrightness = 5 + lcdBackLight * 30; // PWM 0..255 : 0%-100%
+      
+        ledBrightness1 = 2 + lcdBackLight * 2;
+        ledGears[1-1].setValue( gear >= 1 && gear < 6 ? ledBrightness1 : 0 ); // Do not handle N gear, the ISR will take care of it
+        ledGears[2-1].setValue( ( gear >= 2 && gear < 6 ) ? ledBrightness  : 0 );
+        ledGears[3-1].setValue( ( gear >= 3 && gear < 6 ) ? ledBrightness : 0);
+        ledGears[4-1].setValue( gear >= 4 && gear < 6 ? ledBrightness : 0 );
+        ledGears[5-1].setValue( gear == 5 ? ledBrightness : 0 );
+        ledGears[6-1].setValue( gear == 6 ? ledBrightness : 0 ); 
+        Serial.print( "ledBrightness1: " ); Serial.println( ledBrightness1 );
+        Serial.print( "ledBrightness: " ); Serial.println( ledBrightness );
         
-        /// LED Layout: Gr  Gr   Yl  Wh  Wh  Bl
+        /// LED Layout: Gr  Yl   Yl  Wh  Wh  Bl
         ///         LED: 1   2   3   4   5   6
         ///  GEAR
         ///  N:          B   -   -   -   -   -
@@ -630,8 +643,9 @@ void readTemperature()
     
     #endif
 
-    // TODO: Change to ifdef once debugging is finished    
+    #ifdef SERIAL_DEBUG
     Serial.print( "Temp = " ); Serial.println( temperature ); 
+    #endif
     
     temperatureReadError = false; // Clear read error - we made it here
 }

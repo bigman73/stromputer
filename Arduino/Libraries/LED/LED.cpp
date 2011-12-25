@@ -130,7 +130,8 @@ void LED::blink(unsigned int time, byte times)
 void LED::setValue(byte val)
 {
   analogWrite(pin, val);
-  status = (val <= 127) ? false : true;
+  // YN Compare to 0
+  status = (val == 0) ? false : true;
 }
 
 /*

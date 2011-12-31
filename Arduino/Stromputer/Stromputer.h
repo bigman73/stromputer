@@ -31,7 +31,16 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "0.20"
+/*
+ .::::::.:::::::::::::::::::..       ...     .        :::::::::::. ...    :::::::::::::::.,:::::: :::::::..   
+;;;`    `;;;;;;;;'''';;;;``;;;;   .;;;;;;;.  ;;,.    ;;;`;;;```.;;;;;     ;;;;;;;;;;;'''';;;;'''' ;;;;``;;;;  
+'[==/[[[[,    [[      [[[,/[[['  ,[[     \[[,[[[[, ,[[[[,`]]nnn]]'[['     [[[     [[      [[cccc   [[[,/[[['  
+  '''    $    $$      $$$$$$c    $$$,     $$$$$$$$$$$"$$$ $$$""   $$      $$$     $$      $$""""   $$$$$$c    
+ 88b    dP    88,     888b "88bo,"888,_ _,88P888 Y88" 888o888o    88    .d888     88,     888oo,__ 888b "88bo,
+  "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
+*/
+
+#define VERSION "0.21"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable serial debugging info (tracing)
@@ -126,33 +135,57 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 // Photocell level (3K-11K:10K voltage divider) is connected to Analog Pin 2
 #define ANALOGPIN_PHOTCELL 2
 
+// --- Ethernet Cable #1 ( 'Blue' sheath )
+//
 // Note: 6 Digital outputs will be used for Gear LEDs - a total of 6 pins, each pin dedicated to a gear respectively. 
 //       All LEDs pins are PWM (to allow LED Dimming)
-// Gear    |    PIN     |    Wire Color   | LED Color
-// --------------------------------------------------
-// 1/N     |    3       |    Green        |  Green
-//  2      |    5       |    White/Green  |  Yellow
-//  3      |    6       |    Orange       |  Yellow
-//  4      |    9       |    White/Orange |  White
-//  5      |    10      |    White/Blue   |  White
-//  6      |    11      |    Blue         |  Blue
 //
-// Brown & White/Brown Wires = GND
+// Gear    |    PIN      |    Wire Color   | LED Color
+// --------------------------------------------------
+// 1/N     |    D3       |    Green        |  Green
+//  2      |    D5       |    White/Green  |  Yellow
+//  3      |    D6       |    Orange       |  Yellow
+//  4      |    D9       |    White/Orange |  White
+//  5      |    D10      |    White/Blue   |  White
+//  6      |    D11      |    Blue         |  Blue
+//
+//  Brown & White/Brown Wires = GND (Below TX/RX, bottom right ports on ProtoScrewShield)
+//
 
 
 LED ledGears[6] = { LED( 3 ), LED( 5 ), LED( 6 ), \
                     LED( 9 ), LED( 10 ), LED( 11 ) };
 
-byte ledBrightness = 127; 
-byte ledBrightness1 = 5;  
+byte ledBrightnessGreen = 5;  
+byte ledBrightnessYellow = 127; 
+byte ledBrightnessWhite = 127; 
+byte ledBrightnessBlue = 127; 
+
+bool forceLedUpdate = false;
  
 // create a LED object at with the default on-board LED
 LED onBoardLed = LED();
 
+// --------------------------------------------------------------------------
+
+// --- Ethernet Cable #2 ( 'Gray' sheath )
+//
+//   Wire Color   |   Description
+// ---------------------------------------------------
+//   Blue         |   LCD Ground (GND)
+//   Green        |   LCD +5 (VDD)
+//   White/Blue   |   LCD I2C Clock (SCL)
+//   White/Green  |   LCD I2C Data (SDA)
+//   Orange       |   Photo cell leg 1
+//   White/Orange |   Photo cell leg 2
+//   Brown        |   Not Used (Future: Rocker Switch)
+//   White/Brown  |   Not Used (Future: Push Button)
+//
+
+// --------------------------------------------------------------------------
 
 #define IsBetween( x, a, b ) ( x >= a && x <= b ? 1 : 0 )
 
-// --------------------------------------------------------------------------
 // Variables
 
 // Variables used for PCF8591 IC IO
@@ -188,9 +221,21 @@ bool isForceRefreshBatt = true;
 bool isForceRefreshGear = true;
 bool isForceRefreshTemp = true;
 
+// Intervals for Timed Actions - in msec
+#define PROCESS_BATT_LEVEL_TIMED_INTERVAL 2000
+#define PROCESS_TEMP_TIMED_INTERVAL 2000
+#define PROCESS_PHOTO_CELL_TIMED_INTERVAL 1500
+#define LCD_DISPLAY_LOOP_TIMED_INTERVAL 250
+
+
+#define ARDUINO_VIN_VOLTS 4.9f
+#define BATT_VOLT_DIVIDER ( 100000.0f + 33000.0f ) / 33000.0f
+#define GEAR_POSITION_VOLTS 5.0f
+#define GEAR_VOLT_DIVIDER ( 10000.0f + 10000.0f ) / 10000.0f
+
 // --------------------------------------------------------------------------
 
-// Utility for comparing floats
+// Utility macro for comparing floats
 #define EPSILON 0.01
 #define CompareFloats( a, b ) abs( a - b ) < EPSILON ? 1 : 0
 

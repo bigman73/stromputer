@@ -1,26 +1,23 @@
 Battery Voltage Divider (A0)
 -----------------------------
-// TODO: Consider using same arrangement as gear voltage divider
-N5 - Battry (+)/POS
-N6:P6 - RB1 = 33KOhm (TODO VALUE)
-P7:P9 - RB2 (GND) = 100KOhm (TODO VALUE)
-P4:P5 - JUMPER
-
+B7:P7 - Jumper Battry (+)/POS  
+P6:P4 - RB1 = 39KOhm
+P3:M3 (GND) - RB2 = 120KOhm
 
 Gear Voltage Divider (A1)
 --------------------------
 
-Q10 - Gear Position Sensor wire (Pink wire on V-Strom, Green wire)
-Q10:Q6 - RG1 = 33KOhm 
-Q7:Q9 (GND) - RG2  = 33KOhm 
+Q7 - Gear Position Sensor wire [Pink wire on V-Strom, Green wire]
+Q6:Q4 - RG1 = 33KOhm 
+Q3:M4 (GND) - RG2  = 33KOhm, standing vertically, M4 Exposed wire leg but insulatd with heat shrink
 Q4:Q5 - JUMPER
 
 
 Photo Light Sensor/CdS (A2)
 ----------------------------
-R8 (VDD) - CdS ORANGE-WHITE wire on GREY CABLE 
-R6 - CdS ORANGE wire on GREY CABLE 
+P8 (VDD/5V) - CdS ORANGE-WHITE wire on GREY CABLE 
 R7:R9 (GND) - Rcds = 10KOhm
+R6 - CdS ORANGE wire on GREY CABLE 
 R4:R5 - JUMPER
 
 
@@ -33,9 +30,6 @@ I2C SDA (A5)
 -----------------------
 TODO
 
-I2C sCL (A5)
------------------------
-TODO
 
 DS1630 (Temp. I2C Sensor)
 ----------------------------
@@ -44,4 +38,26 @@ TODO
 
 Power Supply Unit (14V->9V)
 ----------------------------
-TODO
+B5 - VCC (BATT)   [Red Wire, 18 Gauage]
+
+B6:C6 Rin - 16 Ohm (standing vertically), C6 Exposed wire leg but insulatd with heat shrink
+
+C5 (K-BLACK STRIPE):E5 (A): Dz1 - 14.4V
+
+E7:E9 - GND JUMPER
+
+C7:G9 - VCC JUMPER 1
+
+sLM2940:
+I7: I (Input - 12-20V)
+J7: G (GND)
+K7: (Output - 9V)
+
+G5:I5 - VCC Jumper 2
+
+Cin - 220uF: E6 -, G6 +
+
+C1 - 0.47uF: I6:J6
+C2 - 22uF: K5 +, J5 -
+
+K6:N4 (VIN) - VIN JUMPER

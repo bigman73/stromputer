@@ -1,0 +1,47 @@
+Battery Voltage Divider (A0)
+-----------------------------
+// TODO: Consider using same arrangement as gear voltage divider
+N5 - Battry (+)/POS
+N6:P6 - RB1 = 33KOhm (TODO VALUE)
+P7:P9 - RB2 (GND) = 100KOhm (TODO VALUE)
+P4:P5 - JUMPER
+
+
+Gear Voltage Divider (A1)
+--------------------------
+
+Q10 - Gear Position Sensor wire (Pink wire on V-Strom, Green wire)
+Q10:Q6 - RG1 = 33KOhm 
+Q7:Q9 (GND) - RG2  = 33KOhm 
+Q4:Q5 - JUMPER
+
+
+Photo Light Sensor/CdS (A2)
+----------------------------
+R8 (VDD) - CdS ORANGE-WHITE wire on GREY CABLE 
+R6 - CdS ORANGE wire on GREY CABLE 
+R7:R9 (GND) - Rcds = 10KOhm
+R4:R5 - JUMPER
+
+
+I2C SCK (A4)
+-----------------------
+T1:T3 - Rsck = 10KOhm (Pull-Up resistor)
+
+
+I2C SDA (A5)
+-----------------------
+TODO
+
+I2C sCL (A5)
+-----------------------
+TODO
+
+DS1630 (Temp. I2C Sensor)
+----------------------------
+TODO
+
+
+Power Supply Unit (14V->9V)
+----------------------------
+TODO

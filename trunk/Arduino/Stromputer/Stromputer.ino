@@ -26,6 +26,16 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+/*
+ .::::::.:::::::::::::::::::..       ...     .        :::::::::::. ...    :::::::::::::::.,:::::: :::::::..   
+;;;`    `;;;;;;;;'''';;;;``;;;;   .;;;;;;;.  ;;,.    ;;;`;;;```.;;;;;     ;;;;;;;;;;;'''';;;;'''' ;;;;``;;;;  
+'[==/[[[[,    [[      [[[,/[[['  ,[[     \[[,[[[[, ,[[[[,`]]nnn]]'[['     [[[     [[      [[cccc   [[[,/[[['  
+  '''    $    $$      $$$$$$c    $$$,     $$$$$$$$$$$"$$$ $$$""   $$      $$$     $$      $$""""   $$$$$$c    
+ 88b    dP    88,     888b "88bo,"888,_ _,88P888 Y88" 888o888o    88    .d888     88,     888oo,__ 888b "88bo,
+  "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
+*/
+
 // []
 // []
 // []   Versions:
@@ -44,6 +54,8 @@
 // []     0.17 - 12/10/2011 + Moved to Arduino 1.0 (.ino), Main loop slowed down to refersh on 4Hz, removed obsolete PCF8591 gear read logic
 // []     0.18 - 12/13/2011 + Add Photo Cell read/Automatic LCD Backlight Adjustment
 // []     0.19 - 12/24/2011 + Fixed forced refresh, lcd back light value now using average (for smoothing), Fixed temperature error handling
+// []     0.20 - 12/25/2011 + LED Dimming, All LED pins changed to PWM
+// []     0.21 - 12/26/2011 + Fixed minor bug - Neutral light was 'jumping' while light has been dimming.
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -74,15 +86,16 @@
 
 #include "Stromputer.h"
 
+
 // ---------------- Timed Actions (Scheduled re-occouring Events) -------------
 // Timed action for processing battery level
-TimedAction battLevelTimedAction = TimedAction( -999999, 2000, processBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
+TimedAction battLevelTimedAction = TimedAction( -999999, PROCESS_BATT_LEVEL_TIMED_INTERVAL , processBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
 // Timed action for processing temperature
-TimedAction temperatureTimedAction = TimedAction( -999999, 2000, processTemperature );
+TimedAction temperatureTimedAction = TimedAction( -999999, PROCESS_TEMP_TIMED_INTERVAL, processTemperature );
 // Timed action for processing photo cell light 
-TimedAction photoCellTimedAction = TimedAction( -999999, 2000, processPhotoCell );
+TimedAction photoCellTimedAction = TimedAction( -999999, PROCESS_PHOTO_CELL_TIMED_INTERVAL, processPhotoCell );
 // Timed action for Sampling & LCD Display
-TimedAction lcdDisplayTimedAction = TimedAction( -999999, 250, lcdDisplayLoop );
+TimedAction lcdDisplayTimedAction = TimedAction( -999999, LCD_DISPLAY_LOOP_TIMED_INTERVAL, lcdDisplayLoop );
 
 /// --------------------------------------------------------------------------
 /// Arduino one-time setup routine - i.e. Program entry point like main()
@@ -91,7 +104,7 @@ void setup()
 { 
     // Setup Serial connection
     Serial.begin( SERIAL_SPEED );
-    Serial.print("------- Stomputer, Firmware version: "); Serial.println(VERSION);
+    Serial.print( "------- Stomputer, Firmware version: " ); Serial.println(VERSION);
 
     onBoardLed.on();    
      
@@ -107,8 +120,8 @@ void setup()
     	
     // sets the digital pin of gear tacktile button as input
     #ifdef MANUAL_GEAR_EMULATION
-    pinMode(MANUAL_GEAR_DOWN_PIN, INPUT);      
-    pinMode(MANUAL_GEAR_UP_PIN, INPUT);      
+    pinMode( MANUAL_GEAR_DOWN_PIN, INPUT );
+    pinMode( MANUAL_GEAR_UP_PIN, INPUT );
     #endif
     
     // set a timer to 62.5 milliseconds (or 16Hz)
@@ -193,7 +206,7 @@ void timerISR()
     {
         // Toggle 1st Gear LED On/Off (using PWM) , signaling the rider that the gear is N
         // Note: LED::Toggle() doesn't work well, because it uses digitalWrite instead of analogWrite, thus doesn't use PWM and causes the LED to show with full brightness always
-        ledGears[ 0 ].setValue( ledGears[ 0 ].getState() ? 0 : ledBrightness1 ); // If last state was true, toggle it to true, and visa versa
+        ledGears[ 0 ].setValue( ledGears[ 0 ].getState() ? 0 : ledBrightnessGreen ); // If last state was true, toggle it to true, and visa versa
     }    
 
     timerDivider++;
@@ -278,7 +291,8 @@ void readBatteryLevelAnalog()
     // Keep a moving time window of 3 readings
     float battLevel2 = battLevel1; // 2nd oldest value
     battLevel1 = battLevel0;
-    battLevel0 = 4.05f * 4.9f * ( value / 1024.0f );
+
+    battLevel0 = BATT_VOLT_DIVIDER * ARDUINO_VIN_VOLTS * ( value / 1024.0f );
     
     if ( battLevel1 == 0 || battLevel2 == 0 )
     {
@@ -401,12 +415,12 @@ void processPhotoCell()
          Serial.print( "LCD Back Light changed (after AVG): "); Serial.println( lcdBackLight );
         #endif
          
+        forceLedUpdate = true; // Force update of LEDs
+         
         lcd.setCursor( 0, 4 );
         lcd.print( lcdBackLight );   
 
         lcd.setBacklight( lcdBackLight );
-        
-        lastGearLED = -1; // Force update of LEDs
     }      
 }
 
@@ -437,7 +451,7 @@ void readGearPositionAnalog()
     Serial.print( "*** gear value: " ); Serial.println( value ); 
     #endif
     
-    gearPositionVolts = 2.0f * 5.0f * ( value / 1024.0f );    // read the input pin for Gear Position
+    gearPositionVolts = GEAR_VOLT_DIVIDER * GEAR_POSITION_VOLTS * ( value / 1024.0f );    // read the input pin for Gear Position
     determineCurrentGear();
     
     gearReadError = false; // Clear read error - we made it here
@@ -540,30 +554,32 @@ void printGearPosition()
 void updateGearLEDs()
 {
     // Optimization: Don't print the gear position if nothing has changed since the last printing
-    if ( !gearReadError && ( lastGearLED == gear ) )
+    if ( !gearReadError && !forceLedUpdate && ( lastGearLED == gear ) )
     {
         return;
     }
     
+    forceLedUpdate = false;
     lastGearLED = gear;
-
-    // TODO: Different algorithms are possible - e.g. each gear has its own led, or incremental, or incremental with top gear (6th) lighting alone
-    // Currently option 3 is implemented. 
     
     // Update each gear led, only if not in error mode
     if ( gear != GEAR_ERROR )
     {
-        ledBrightness = 5 + lcdBackLight * 30; // PWM 0..255 : 0%-100%
+        ledBrightnessGreen = 1 + lcdBackLight; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
+        ledBrightnessYellow = 1 + lcdBackLight * 6; // PWM 0..255 : 0%-100%
+        ledBrightnessWhite = 1 + lcdBackLight * 12; // PWM 0..255 : 0%-100%
+        ledBrightnessBlue = 1 + lcdBackLight * 6; // PWM 0..255 : 0%-100%
       
-        ledBrightness1 = 2 + lcdBackLight * 2;
-        ledGears[1-1].setValue( gear >= 1 && gear < 6 ? ledBrightness1 : 0 ); // Do not handle N gear, the ISR will take care of it
-        ledGears[2-1].setValue( ( gear >= 2 && gear < 6 ) ? ledBrightness  : 0 );
-        ledGears[3-1].setValue( ( gear >= 3 && gear < 6 ) ? ledBrightness : 0);
-        ledGears[4-1].setValue( gear >= 4 && gear < 6 ? ledBrightness : 0 );
-        ledGears[5-1].setValue( gear == 5 ? ledBrightness : 0 );
-        ledGears[6-1].setValue( gear == 6 ? ledBrightness : 0 ); 
-        Serial.print( "ledBrightness1: " ); Serial.println( ledBrightness1 );
-        Serial.print( "ledBrightness: " ); Serial.println( ledBrightness );
+         // Do not handle N gear, the ISR will take care of it
+        if ( gear != GEAR_NEUTRAL )
+        {
+            ledGears[1-1].setValue( ( gear >= 1 && gear < 6 ) ? ledBrightnessGreen    : 0 );
+        }
+        ledGears[2-1].setValue( ( gear >= 2 && gear < 6 ) ? ledBrightnessYellow   : 0 );
+        ledGears[3-1].setValue( ( gear >= 3 && gear < 6 ) ? ledBrightnessYellow   : 0 );
+        ledGears[4-1].setValue( ( gear >= 4 && gear < 6 ) ? ledBrightnessWhite    : 0 );
+        ledGears[5-1].setValue(   gear == 5               ? ledBrightnessWhite    : 0 );
+        ledGears[6-1].setValue(   gear == 6               ? ledBrightnessBlue     : 0 );  // Overdrive - show only the 6th gear
         
         /// LED Layout: Gr  Yl   Yl  Wh  Wh  Bl
         ///         LED: 1   2   3   4   5   6

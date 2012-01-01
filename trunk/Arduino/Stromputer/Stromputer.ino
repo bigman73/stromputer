@@ -56,6 +56,7 @@
 // []     0.19 - 12/24/2011 + Fixed forced refresh, lcd back light value now using average (for smoothing), Fixed temperature error handling
 // []     0.20 - 12/25/2011 + LED Dimming, All LED pins changed to PWM
 // []     0.21 - 12/26/2011 + Fixed minor bug - Neutral light was 'jumping' while light has been dimming.
+// []     0.22 - 12/26/2011 + Adjusted real resistor values
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -168,7 +169,7 @@ void lcdDisplayLoop()
 
     #ifdef PCF8591_DAC_GEAR_EMULATOR
     // NOTE: DEBUG MODE ONLY - AUTO INCREMENTS EMULATOR OUTPUT VOLTAGE (Used for gear emulation)
-    dac_value += 1;
+    dac_value += 3;
     controlPCF8591_I2C( dac_value, all_adc_values, PCF8591_MASK_CHANNEL0 ); // Output DAC, ADC from channel 1
     #endif
     
@@ -876,6 +877,8 @@ void initializeDS1631()
   Wire.beginTransmission(DS1631_I2C_ADDRESS);
   Wire.write((int) DS1631_I2C_COMMAND_START_CONVERT); // Start Conversion
   Wire.endTransmission();
+  
+  Serial.println( ">> Initialized DS1631" );
 }
 
 /// ----------------------------------------------------------------------------------------------------

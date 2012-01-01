@@ -40,7 +40,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.21"
+#define VERSION "0.22"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable serial debugging info (tracing)
@@ -53,10 +53,10 @@
 #define DEBUG_PRINT_GEARVOLTS
 
 // Comment in/out to enable/disable PCF8591 DAC Gear Emulation (Automatic increment from 0..5V in loops)
-// #define PCF8591_DAC_GEAR_EMULATOR
+//#define PCF8591_DAC_GEAR_EMULATOR
 
 // Comment in/out to enable/disable manual gear emulation (using two tactile buttons)
-#define MANUAL_GEAR_EMULATION
+// #define MANUAL_GEAR_EMULATION
 
 // Temperature mode - F or C
 #define TEMPERATURE_MODE 'F'
@@ -229,9 +229,13 @@ bool isForceRefreshTemp = true;
 
 
 #define ARDUINO_VIN_VOLTS 4.9f
-#define BATT_VOLT_DIVIDER ( 100000.0f + 33000.0f ) / 33000.0f
+// RB1: 39Kohm, Real measured value: 38.2KOhm
+// RB2: 120Kohm, Real measured value: 118.5KOhm
+#define BATT_VOLT_DIVIDER ( 118500.0f + 38200.0f ) / 38200.0f
 #define GEAR_POSITION_VOLTS 5.0f
-#define GEAR_VOLT_DIVIDER ( 10000.0f + 10000.0f ) / 10000.0f
+// RG1: 33Kohm, Real measured value: 32.4KOhm
+// RG2: 33Kohm, Real measured value: 32.4KOhm
+#define GEAR_VOLT_DIVIDER ( 32400.0f + 32400.0f ) / 32400.0f
 
 // --------------------------------------------------------------------------
 

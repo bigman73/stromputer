@@ -58,25 +58,24 @@ B5 - VCC (BATT)   [Red Wire, 18 Gauage]
 
 B6:C6 Rin - 16 Ohm (standing vertically), C6 Exposed wire leg but insulatd with heat shrink
 
-C5 (K-BLACK STRIPE):E5 (A): Dz1 - 14.4V
+C5:E5 (C5 = K/BLACK STRIPE, E6 = A): Dz1 - 14.4V
 
-E7:E9 - GND JUMPER
-
-C7:G9 - VCC JUMPER 1
+E7:E9 - GND JUMPER 1
+J5:L3 - GND JUMPER 2
+C7:G7 - VCC JUMPER 1
+G5:I5 - VCC Jumper 2
 
 sLM2940:
 I7: I (Input - 12-20V)
 J7: G (GND)
 K7: (Output - 9V)
 
-G5:I5 - VCC Jumper 2
+Cin1 - 220uF: E6 -, G6 +
 
-Cin - 220uF: E6 -, G6 +
+Cin2 - 0.47uF: I6:J6
+Cout3 - 22uF: K5 +, L4 -
 
-C1 - 0.47uF: I6:J6
-C2 - 22uF: K5 +, J5 -
-
-K6:N4 (VIN) - VIN JUMPER
+K6:[VIN PORT] - VIN JUMPER (Purple wire)
 
 
 
@@ -86,7 +85,7 @@ SHIELD SCREW IN PORTS:
 LEFT SIDE:
 ----------
 5V  - LCD +, Grey sheith green
-GND
+GND - Battery GND
 GND - LCD GND, Grey sheith blue/black
 VIN 
 RST

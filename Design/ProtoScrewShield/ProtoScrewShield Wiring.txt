@@ -60,7 +60,7 @@ B6:C6 Rin - 16 Ohm (standing vertically), C6 Exposed wire leg but insulatd with 
 
 C5:E5 (C5 = K/BLACK STRIPE, E6 = A): Dz1 - 14.4V
 
-E7:E9 - GND JUMPER 1
+E7:G9 - GND JUMPER 1
 J5:L3 - GND JUMPER 2
 C7:G7 - VCC JUMPER 1
 G5:I5 - VCC Jumper 2

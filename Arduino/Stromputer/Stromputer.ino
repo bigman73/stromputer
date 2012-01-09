@@ -57,6 +57,8 @@
 // []     0.20 - 12/25/2011 + LED Dimming, All LED pins changed to PWM
 // []     0.21 - 12/26/2011 + Fixed minor bug - Neutral light was 'jumping' while light has been dimming.
 // []     0.22 - 12/26/2011 + Adjusted real resistor values
+// []     0.23 -   1/8/2012 + Added time action for checking forced LCD refresh, added serial messages when booting, Added initial Serial Input
+// []
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -74,7 +76,7 @@
 // http://www.arduino.cc/playground/Code/LCDi2c
 #include <LCDi2cNHD.h>                    
 
-// Include 3rd Party library - Timed Actions
+// Include 3rd Party library - Timed Actions (Modified by Yuval Naveh)
 // http://www.arduino.cc/playground/Code/TimedAction
 #include <TimedAction.h>
 
@@ -89,6 +91,10 @@
 
 
 // ---------------- Timed Actions (Scheduled re-occouring Events) -------------
+
+// Timed action for forced LCD update
+TimedAction forceLCDRefreshTimedAction = TimedAction( 0, LCD_FORCEREFRESH_INTERVAL / 2 , forceLCDRefresh );
+
 // Timed action for processing battery level
 TimedAction battLevelTimedAction = TimedAction( -999999, PROCESS_BATT_LEVEL_TIMED_INTERVAL , processBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
 // Timed action for processing temperature
@@ -98,6 +104,9 @@ TimedAction photoCellTimedAction = TimedAction( -999999, PROCESS_PHOTO_CELL_TIME
 // Timed action for Sampling & LCD Display
 TimedAction lcdDisplayTimedAction = TimedAction( -999999, LCD_DISPLAY_LOOP_TIMED_INTERVAL, lcdDisplayLoop );
 
+// Timed action for Serial Input
+TimedAction serialInputTimedAction = TimedAction( 0, 100, processSerialInput );
+
 /// --------------------------------------------------------------------------
 /// Arduino one-time setup routine - i.e. Program entry point like main()
 /// --------------------------------------------------------------------------
@@ -105,15 +114,11 @@ void setup()
 { 
     // Setup Serial connection
     Serial.begin( SERIAL_SPEED );
-    Serial.print( "------- Stomputer, Firmware version: " ); Serial.println(VERSION);
+    Serial.print( "------- Stromputer, Firmware version: " ); Serial.println( VERSION );
 
     onBoardLed.on();    
      
-    lcd.init();                          // Init the display, clears the display
-
-    // Set initial LCD backlight & contrast
-    lcd.setBacklight( lcdBackLight );
-    lcd.setContrast( lcdContrast );
+    initializeLCD();
 
     showWelcome();
    
@@ -128,6 +133,8 @@ void setup()
     // set a timer to 62.5 milliseconds (or 16Hz)
     Timer1.initialize( 1000 );  // 1000 microseconds = 1 msec = 1000hz
     Timer1.attachInterrupt( timerISR ); // attach the service routine here
+    
+    Serial.println( ">> Stromputer ON. Ready to Rock! <<" );
 }
 
 
@@ -136,6 +143,7 @@ void setup()
 /// --------------------------------------------------------------------------
 void loop()
 {
+    serialInputTimedAction.check();
     lcdDisplayTimedAction.check();
 
     delay(LoopSleepTime);
@@ -146,23 +154,8 @@ void loop()
 /// --------------------------------------------------------------------------
 void lcdDisplayLoop()
 {
-    // Force full screen refresh every X seconds (some unknown bug with NHD LCD causes it to clear the screen from time to time)
-    if ( millis() - lastForceLCDRefreshMillis > LCD_FORCEREFRESH_INTERVAL )
-    {
-        #ifdef SERIAL_DEBUG 
-        Serial.println( "** FORCE REFRESH LCD DISPLAY **" );
-        #endif
-        isForceRefreshTemp = true;
-        isForceRefreshBatt = true;
-        isForceRefreshGear = true;
-        lastForceLCDRefreshMillis = millis();
-        
-        battLevelTimedAction.force(); 
-        temperatureTimedAction.force();
-        photoCellTimedAction.force();
-    }
-    
     // Timed Actions ("Events")
+    forceLCDRefreshTimedAction.check();
     battLevelTimedAction.check();       
     temperatureTimedAction.check();
     photoCellTimedAction.check();
@@ -212,6 +205,31 @@ void timerISR()
 
     timerDivider++;
 }
+
+/// --------------------------------------------------------------------------
+/// Timed Action Event handler for forceLCDRefreshTimedAction - 
+///     Triggers a full screen refresh of the NHD LCD 
+/// --------------------------------------------------------------------------
+void forceLCDRefresh()
+{
+    // Force full screen LCD refresh every X seconds (some unknown bug with NHD LCD causes it to clear the screen from time to time)
+    if ( millis() - lastForceLCDRefreshMillis > LCD_FORCEREFRESH_INTERVAL )
+    {
+        #ifdef SERIAL_DEBUG 
+        Serial.println( "** FORCE REFRESH LCD DISPLAY **" );
+        #endif
+        isForceRefreshTemp = true;
+        isForceRefreshBatt = true;
+        isForceRefreshGear = true;
+        lastForceLCDRefreshMillis = millis();
+        
+        // Force the timed actions to run
+        battLevelTimedAction.force(); 
+        temperatureTimedAction.force();
+        photoCellTimedAction.force();
+    }
+}
+
 
 /// --------------------------------------------------------------------------
 /// Handle reading the gear position, using one of the modes:
@@ -825,6 +843,8 @@ int controlPCF8591_I2C(byte dac_value, byte adc_values[], byte adcChannelMask )
 /// ------------------------------------------------------------
 void testGearLEDs()
 {
+    Serial.println( ">> Test Gear LEDs" );
+    
     for ( int i=0; i < 2; i++ )
     {
         // Light left most and right most, then 'move' towards the center with two leds at a time
@@ -848,11 +868,26 @@ void testGearLEDs()
 }
 
 /// --------------------------------------------------------------------------
+/// Initialize the NHD LCD (I2C IC)
+/// --------------------------------------------------------------------------
+void initializeLCD()
+{   
+    Serial.println( ">> LCD Initializing.." );
+    lcd.init();                          // Init the display, clears the display
+
+    // Set initial LCD backlight & contrast
+    lcd.setBacklight( lcdBackLight );
+    lcd.setContrast( lcdContrast );
+
+    Serial.println( ">> LCD Initialized" );
+}
+
+/// --------------------------------------------------------------------------
 /// Initialize the DS 1631 Temperature Sensor (I2C IC)
 /// --------------------------------------------------------------------------
 void initializeDS1631()
 {
-  Serial.println( ">> Initializing DS1631" );
+  Serial.println( ">> DS1631 Initializing.." );
   
    // Stop conversion to be able to modify "Access Config" Register
   Wire.beginTransmission( DS1631_I2C_ADDRESS );
@@ -878,7 +913,7 @@ void initializeDS1631()
   Wire.write((int) DS1631_I2C_COMMAND_START_CONVERT); // Start Conversion
   Wire.endTransmission();
   
-  Serial.println( ">> Initialized DS1631" );
+  Serial.println( ">> DS1631 Initialized" );
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -887,11 +922,15 @@ void initializeDS1631()
 void showWelcome()
 {
     #ifdef SHOW_WELCOME
+    
+    
+    testGearLEDs();
+
     String line2 = String(Welcome1_Line2);
     line2 = line2 + VERSION;
     printWelcomeScreen(String(Welcome1_Line1), line2, 800, 25, DIRECTION_RIGHT );
 
-    testGearLEDs();
+   
     #endif    
 }
 
@@ -900,6 +939,8 @@ void showWelcome()
 /// ----------------------------------------------------------------------------------------------------
 void printWelcomeScreen( String line1, String line2, int showDelay, int scrollDelay, char scrollDirection )
 {
+    Serial.println( ">> Show Welcome - BEGIN.." );     
+
     // Print line 1
     lcd.print( line1 );       
     // Print line 2
@@ -919,5 +960,44 @@ void printWelcomeScreen( String line1, String line2, int showDelay, int scrollDe
     }
     
     lcd.clear();
+    
+    Serial.println( ">> Show Welcome - END" );
 }
 
+String serialCommand = "";
+
+/// ----------------------------------------------------------------------------------------------------
+/// Processes Serial Input - commands given to Stromputer through the Serial port
+/// ----------------------------------------------------------------------------------------------------
+void processSerialInput()
+{ 
+  while (Serial.available() > 0) 
+  {
+    byte ch = ( byte ) Serial.read();
+    // Serial.println( ch );
+    
+    if ( ch == ( byte ) '?' )
+    {      
+        // handle command
+        Serial.print( "Recieved command: " ); Serial.println( serialCommand );
+        
+        if ( serialCommand == "StromputerAlive" )
+        {
+            Serial.println( "Yes, I'm here" );
+        }
+        else if ( serialCommand == "Temp" )
+        {
+            Serial.print( temperature );
+            Serial.println( "F" );
+        }
+        
+        serialCommand = "";
+    }
+    else
+    {
+         serialCommand += ( char ) ch;
+    }
+  }
+
+  Serial.flush();
+}

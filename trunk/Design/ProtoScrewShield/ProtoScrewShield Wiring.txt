@@ -136,10 +136,10 @@ AREF
 GND
 D13
 D12
-D11
-D10 - GEAR LED6/Blue sheith blue
-D9  - GEAR LED5/Blue sheith white/blue
-D8  - GEAR LED4/Blue sheith white/orange
+D11 - GEAR LED6/Blue sheith blue
+D10 - GEAR LED5/Blue sheith white/blue
+D9  - GEAR LED4/Blue sheith white/orange
+D8  
 D7
 D6  - GEAR LED3/Blue sheith orange
 D5  - GEAR LED2/Blue sheith white/green
@@ -148,5 +148,5 @@ D3  - GEAR LED1/Blue sheith green
 D2
 TX
 RX
-GND 	- Blue sheith brown
 GND - Blue sheith white/brown
+GND - Blue sheith brown

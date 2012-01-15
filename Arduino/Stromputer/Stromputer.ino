@@ -59,7 +59,7 @@
 // []     0.22 - 12/26/2011 + Adjusted real resistor values
 // []     0.23 -   1/8/2012 + Added time action for checking forced LCD refresh, added serial messages when booting, Added initial Serial Input
 // []     0.24 -   1/14/2012 + Added Serial Commands, removed serial debug
-// []
+// []     0.25 -   1/14/2012 + Added Non-Volatile EEPROM configuration (remains after power is shut off, read when rebooting)
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -68,6 +68,7 @@
 // DS1631: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1221926830
 // ISR: http://letsmakerobots.com/node/28278
 // Light Sensors: http://www.ladyada.net/learn/sensors/cds.html
+// EEProm Anything: http://arduino.cc/playground/Code/EEPROMWriteAnything
 
 #include <Wire.h>
 #include <inttypes.h>
@@ -86,6 +87,11 @@
 
 // Include 3rd Party library - TimerOne, used for Timer ISR
 #include <TimerOne.h>
+
+// EEPROM support
+#include <EEPROM.h>
+#include "EEPROMAnything.h"
+
 // -----------------------------------------------------------------
 
 #include "Stromputer.h"
@@ -118,7 +124,9 @@ void setup()
     Serial.print( "------- Stromputer, Firmware version: " ); Serial.println( VERSION );
 
     onBoardLed.on();    
-     
+    
+    setupConfiguration();
+
     initializeLCD();
 
     showWelcome();
@@ -636,15 +644,25 @@ void readTemperature()
         _TH = _TH - 256; 
     temperature = _TH + _TL / 256.0;
       
-    #if TEMPERATURE_MODE == 'F'
-    
-    // Convert celsius to fahrenheight
-    temperature = temperature * 9.0 / 5.0 + 32;
-    
-    #endif
+    if ( configuration.temperatureMode == 'F' )
+    {
+        // Convert celsius to fahrenheight
+        temperature = toFahrenheight( temperature );
+    }
     
     temperatureReadError = false; // Clear read error - we made it here
 }
+
+float toFahrenheight( float celsius )
+{
+      return temperature * 9.0 / 5.0 + 32;
+}
+
+float toCelsius( float fahrenheight )
+{
+      return ( temperature - 32 ) * 5.0 / 9.0;
+}
+
 
 /// ----------------------------------------------------------------------------------------------------
 /// Print the current temperature (only if it has been a changed)
@@ -698,11 +716,14 @@ void printTemperature()
         temperatureValue += formattedTemperature;
         
         // Add temperature mode unit
-        #if TEMPERATURE_MODE == 'F'
-        temperatureValue += "F";
-        #else
-        temperatureValue += "C";
-        #endif
+        if ( configuration.temperatureMode == 'F' )
+        {
+            temperatureValue += "F";
+        }
+        else
+        {
+            temperatureValue += "C";
+        }
     }
     
     lcd.setCursor( 1, 10 );
@@ -936,20 +957,19 @@ void processSerialInput()
     {      
         // handle command
         serialCommand.toUpperCase();
+        Serial.println();
         Serial.print( "Recieved command: " ); Serial.println( serialCommand );
         
         if ( serialCommand == "ALIVE" )
         {
             Serial.println( "Yes, I'm here" );
         }
-        else if ( serialCommand == "TEMP" )
+        else if ( serialCommand == "STAT" )
         {
             Serial.print( "Current Temperature = " );
             Serial.print( temperature );
-            Serial.println( "F" );
-        }
-        else if ( serialCommand == "GEAR" )
-        {
+            Serial.println( configuration.temperatureMode  );
+
             Serial.print( "Current Gear = " );
             if ( gear == 0 )
                 Serial.println( "N" );
@@ -957,15 +977,11 @@ void processSerialInput()
                 Serial.println( gear );
             Serial.print( "Current Gear Position Volts = " );
             Serial.println( gearPositionVolts );
-        }
-        else if ( serialCommand == "BATT" )
-        {
+
             Serial.print( "Battery Level = " );
             Serial.print( battLevel );
             Serial.println( "V" );
-        }
-        else if ( serialCommand == "LCD" )
-        {
+
             Serial.print( "LCD Back Light = " );
             Serial.println( lcdBackLight );
             Serial.print( "LCD Contrast = " );
@@ -973,10 +989,43 @@ void processSerialInput()
             Serial.print( "Photo Cell = " );
             Serial.println( photoCellLevel );
         }
+        else if ( serialCommand == "CONFIG" )
+        {
+           printConfiguration(); 
+        }
+        else if ( serialCommand == "SETTEMP_C" )
+        {
+            if ( configuration.temperatureMode != 'C' )
+            {
+                configuration.temperatureMode = 'C';                
+                lastTemperature = toCelsius( temperature ); // Avoid restarting DS1631
+                writeConfiguration();
+                Serial.println( "Temperature mode set to Celsius" );
+            }
+            else
+            {
+                Serial.println( "Nothing done - Temperature mode was already set to Celsius" );
+            }    
+        }
+        else if ( serialCommand == "SETTEMP_F" )
+        {
+            if ( configuration.temperatureMode != 'F' )
+            {
+                configuration.temperatureMode = 'F';
+                lastTemperature = toFahrenheight( temperature ); // Avoid restarting DS1631
+                writeConfiguration();
+                Serial.println( "Temperature mode set to Fahrenheight" );
+            }
+            else
+            {
+                Serial.println( "Nothing done - Temperature mode was already set to Fahrenheight" );
+            }           
+        }
         else
         {
             Serial.print( "Unknown command: " );
             Serial.println( serialCommand );
+            Serial.println( "SYNTAX: Alive? | Stat?" );
         }
         
         Serial.println();
@@ -990,3 +1039,34 @@ void processSerialInput()
 
   Serial.flush();
 }
+
+void setupConfiguration()
+{
+    // Read configuration from EEPROM
+    EEPROM_readAnything( EEPROM_CONFIG_MEMOFFSET, configuration );
+    printConfiguration();
+    
+    if ( configuration.isValidConfig != 12345 )
+    {       
+        // First time configuration - set & write defaults to EEPROM
+        configuration.isValidConfig = 12345;
+        configuration.temperatureMode = DEFAULT_TEMPERATURE_MODE;
+     
+        writeConfiguration();
+    }
+}
+
+void writeConfiguration()
+{
+    EEPROM_writeAnything( EEPROM_CONFIG_MEMOFFSET, configuration );        
+}
+    
+
+void printConfiguration()
+{
+    Serial.println( "-- CONFIG -- " );
+    Serial.print( "IsValidConfig (Raw Value): " ); Serial.println( configuration.isValidConfig );
+    Serial.print( "IsValidConfig: " ); Serial.println( ( configuration.isValidConfig == 12345 ) ? "Y" : "N" );
+    Serial.print( "temperatureMode Mode: " ); Serial.println( configuration.temperatureMode );
+}
+

@@ -40,7 +40,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.24"
+#define VERSION "0.25"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
@@ -56,7 +56,7 @@
 // #define MANUAL_GEAR_EMULATION
 
 // Temperature mode - F or C
-#define TEMPERATURE_MODE 'F'
+#define DEFAULT_TEMPERATURE_MODE 'F'
 
 #define SERIAL_SPEED 9600
 
@@ -182,6 +182,14 @@ LED onBoardLed = LED();
 // --------------------------------------------------------------------------
 
 #define IsBetween( x, a, b ) ( x >= a && x <= b ? 1 : 0 )
+
+#define EEPROM_CONFIG_MEMOFFSET 16
+
+struct config_t
+{
+    int isValidConfig; // Should be 12345 when valid
+    char temperatureMode; // F or C
+} configuration;
 
 // Variables
 

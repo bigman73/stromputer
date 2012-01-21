@@ -60,15 +60,10 @@
 // []     0.23 -   1/8/2012 + Added time action for checking forced LCD refresh, added serial messages when booting, Added initial Serial Input
 // []     0.24 -   1/14/2012 + Added Serial Commands, removed serial debug
 // []     0.25 -   1/14/2012 + Added Non-Volatile EEPROM configuration (remains after power is shut off, read when rebooting)
+// []     0.26 -   1/21/2012 + Fixed I2C Error Handling, more EEPROM configurations
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
-
-// References/Credits:
-// DS1631: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1221926830
-// ISR: http://letsmakerobots.com/node/28278
-// Light Sensors: http://www.ladyada.net/learn/sensors/cds.html
-// EEProm Anything: http://arduino.cc/playground/Code/EEPROMWriteAnything
 
 #include <Wire.h>
 #include <inttypes.h>
@@ -83,16 +78,25 @@
 #include <TimedAction.h>
 
 // Include 3rd Party library - LED (Modified by Yuval Naveh)
+// http://arduino.cc/playground/Code/LED
 #include <LED.h>
 
 // Include 3rd Party library - TimerOne, used for Timer ISR
+// http://arduino.cc/playground/Code/Timer1
 #include <TimerOne.h>
 
 // EEPROM support
 #include <EEPROM.h>
+// EEProm Anything: http://arduino.cc/playground/Code/EEPROMWriteAnything
 #include "EEPROMAnything.h"
 
+
 // -----------------------------------------------------------------
+
+// Other References/Credits:
+// DS1631: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1221926830
+// ISR: http://letsmakerobots.com/node/28278
+// Light Sensors: http://www.ladyada.net/learn/sensors/cds.html
 
 #include "Stromputer.h"
 
@@ -127,11 +131,17 @@ void setup()
     
     setupConfiguration();
 
-    initializeLCD();
+    if ( !initializeLCD() )
+    {
+        Serial.println( ">> ERROR: LCD failed to initialize" );
+    }
 
     showWelcome();
    
-    initializeDS1631();
+    if ( !initializeDS1631() )
+    {
+        Serial.println( ">> ERROR: DS1631 failed to initialize" );
+    }
     	
     // sets the digital pin of gear tacktile button as input
     #ifdef MANUAL_GEAR_EMULATION
@@ -142,7 +152,7 @@ void setup()
     // set a timer to 62.5 milliseconds (or 16Hz)
     Timer1.initialize( 1000 );  // 1000 microseconds = 1 msec = 1000hz
     Timer1.attachInterrupt( timerISR ); // attach the service routine here
-    
+ 
     Serial.println( ">> Stromputer ON. Ready to Rock! <<" );
 }
 
@@ -163,6 +173,7 @@ void loop()
 /// --------------------------------------------------------------------------
 void lcdDisplayLoop()
 {
+    Serial.print("*");
     // Timed Actions ("Events")
     forceLCDRefreshTimedAction.check();
     battLevelTimedAction.check();       
@@ -179,6 +190,7 @@ void lcdDisplayLoop()
 }
 
 unsigned short int timerDivider = 0;
+bool disableTimerISR = false;
 
 /// --------------------------------------------------------------------------
 /// Timer compare Interrupt Service Routine (ISR)
@@ -186,6 +198,9 @@ unsigned short int timerDivider = 0;
 /// --------------------------------------------------------------------------
 void timerISR()
 {
+    if ( disableTimerISR )
+        return;
+    
     // Handle main board blinking at 1Hz for each toggle
     if ( timerDivider % 1000 == 1 ) 
     {
@@ -848,34 +863,50 @@ void testGearLEDs()
 /// --------------------------------------------------------------------------
 /// Initialize the NHD LCD (I2C IC)
 /// --------------------------------------------------------------------------
-void initializeLCD()
+bool initializeLCD()
 {   
     Serial.println( ">> LCD Initializing.." );
-    lcd.init();                          // Init the display, clears the display
+    // Initialize the display, clears the display
+    if ( !lcd.init() )
+    {
+        return false;
+    }
 
     // Set initial LCD backlight & contrast
     lcd.setBacklight( lcdBackLight );
     lcd.setContrast( lcdContrast );
 
     Serial.println( ">> LCD Initialized" );
+    lcdInitialized = true;
+    
+    return true;
 }
 
 /// --------------------------------------------------------------------------
 /// Initialize the DS 1631 Temperature Sensor (I2C IC)
 /// --------------------------------------------------------------------------
-void initializeDS1631()
+bool initializeDS1631()
 {
   Serial.println( ">> DS1631 Initializing.." );
   
    // Stop conversion to be able to modify "Access Config" Register
   Wire.beginTransmission( DS1631_I2C_ADDRESS );
   Wire.write((int)( DS1631_I2C_COMMAND_STOP_CONVERT )); // Stop conversion
-  Wire.endTransmission();  
+  if ( Wire.endTransmission() )
+  {
+    Serial.println( ">> Error: Stop Convert command failed" );
+    return false; // Error
+  }
     
   // READ "Access Config" register
   Wire.beginTransmission(DS1631_I2C_ADDRESS);
   Wire.write((int)( DS1631_I2C_COMMAND_ACCESS_CONFIG ));
-  Wire.endTransmission();
+  if ( Wire.endTransmission() )
+  {
+      Serial.println( ">> Error: Access Config command failed" );
+      return false; // Error
+  }
+
   Wire.requestFrom( DS1631_I2C_ADDRESS,1 ); // Read 1 byte
   Wire.available();
   Wire.read(); // receive a byte (AC), but ignore it, we have no use for it
@@ -884,14 +915,24 @@ void initializeDS1631()
   Wire.beginTransmission(DS1631_I2C_ADDRESS);
   Wire.write( DS1631_I2C_COMMAND_ACCESS_CONFIG );
   Wire.write( DS1631_I2C_CONTROLBYTE_CONT_12BIT ); // Continuous conversion & 12 bits resolution
-  Wire.endTransmission();
+  if ( Wire.endTransmission() )
+  {
+      Serial.println( ">> Error: Access Continous Control Byte command failed" );
+      return false; // Error
+  }
 
   // START conversion to get T°
   Wire.beginTransmission(DS1631_I2C_ADDRESS);
   Wire.write((int) DS1631_I2C_COMMAND_START_CONVERT); // Start Conversion
-  Wire.endTransmission();
+  if ( Wire.endTransmission() )
+  {
+      Serial.println( ">> Error: Start Convert command failed" );
+      return false; // Error
+  }
   
   Serial.println( ">> DS1631 Initialized" );
+  
+  return true; // Success
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -899,15 +940,13 @@ void initializeDS1631()
 /// ----------------------------------------------------------------------------------------------------
 void showWelcome()
 {
-    #ifdef SHOW_WELCOME
-    
+    #ifdef SHOW_WELCOME    
     
     testGearLEDs();
 
     String line2 = String(Welcome1_Line2);
     line2 = line2 + VERSION;
     printWelcomeScreen(String(Welcome1_Line1), line2, 800, 25, DIRECTION_RIGHT );
-
    
     #endif    
 }
@@ -942,126 +981,191 @@ void printWelcomeScreen( String line1, String line2, int showDelay, int scrollDe
     Serial.println( ">> Show Welcome - END" );
 }
 
-String serialCommand = "";
+String serialCommandLine = "";
+const char *commandArgDelimiter = " ";
 
 /// ----------------------------------------------------------------------------------------------------
 /// Processes Serial Input - commands given to Stromputer through the Serial port
 /// ----------------------------------------------------------------------------------------------------
 void processSerialInput()
 { 
+  disableTimerISR = true;
+
   while (Serial.available() > 0) 
   {
     byte ch = ( byte ) Serial.read();
     
-    if ( ch == ( byte ) '?' )
+    if ( ch == ( byte ) ';' )
     {      
-        // handle command
-        serialCommand.toUpperCase();
+        // handle command line
+        serialCommandLine.toUpperCase();
         Serial.println();
-        Serial.print( "Recieved command: " ); Serial.println( serialCommand );
+        Serial.print( "Recieved: " ); Serial.println( serialCommandLine );
         
-        if ( serialCommand == "ALIVE" )
+        serialCommandLine.concat( commandArgDelimiter ); // To ensure that the last token is read stopping properly
+        char commandLine[30];
+        serialCommandLine.toCharArray( commandLine, 30 );
+        serialCommandLine = String( "" );
+        char *tkn_it;
+        String cmd, arg1, arg2;
+       
+        char *p = strtok_r( commandLine, commandArgDelimiter, &tkn_it );        
+        if ( p ) 
         {
-            Serial.println( "Yes, I'm here" );
-        }
-        else if ( serialCommand == "STAT" )
-        {
-            Serial.print( "Current Temperature = " );
-            Serial.print( temperature );
-            Serial.println( configuration.temperatureMode  );
-
-            Serial.print( "Current Gear = " );
-            if ( gear == 0 )
-                Serial.println( "N" );
-            else
-                Serial.println( gear );
-            Serial.print( "Current Gear Position Volts = " );
-            Serial.println( gearPositionVolts );
-
-            Serial.print( "Battery Level = " );
-            Serial.print( battLevel );
-            Serial.println( "V" );
-
-            Serial.print( "LCD Back Light = " );
-            Serial.println( lcdBackLight );
-            Serial.print( "LCD Contrast = " );
-            Serial.println( lcdContrast );
-            Serial.print( "Photo Cell = " );
-            Serial.println( photoCellLevel );
-        }
-        else if ( serialCommand == "CONFIG" )
-        {
-           printConfiguration(); 
-        }
-        else if ( serialCommand == "SETTEMP_C" )
-        {
-            if ( configuration.temperatureMode != 'C' )
+            cmd = String( p );
+            p = strtok_r( NULL, commandArgDelimiter, &tkn_it );
+            if ( p ) 
             {
-                configuration.temperatureMode = 'C';                
-                lastTemperature = toCelsius( temperature ); // Avoid restarting DS1631
-                writeConfiguration();
-                Serial.println( "Temperature mode set to Celsius" );
+                arg1 = String( p );
+                arg1.toUpperCase();
+                p = strtok_r( NULL, commandArgDelimiter, &tkn_it );
+                if ( p )
+                {
+                    arg2 = String( p );
+                    arg2.toUpperCase();
+                }                    
             }
-            else
-            {
-                Serial.println( "Nothing done - Temperature mode was already set to Celsius" );
-            }    
         }
-        else if ( serialCommand == "SETTEMP_F" )
-        {
-            if ( configuration.temperatureMode != 'F' )
-            {
-                configuration.temperatureMode = 'F';
-                lastTemperature = toFahrenheight( temperature ); // Avoid restarting DS1631
-                writeConfiguration();
-                Serial.println( "Temperature mode set to Fahrenheight" );
-            }
-            else
-            {
-                Serial.println( "Nothing done - Temperature mode was already set to Fahrenheight" );
-            }           
-        }
-        else
-        {
-            Serial.print( "Unknown command: " );
-            Serial.println( serialCommand );
-            Serial.println( "SYNTAX: Alive? | Stat?" );
-        }
+            
+        handleCommand( cmd, arg1, arg2 );
         
         Serial.println();
-        serialCommand = "";
     }
     else
     {
-         serialCommand += ( char ) ch;
+        // Protect against commands which are too long
+        if ( serialCommandLine.length() >= 30 )
+        {
+             serialCommandLine = String( "" );
+         }
+ 
+         serialCommandLine += ( char ) ch;
     }
   }
 
   Serial.flush();
+  delay( 50 );
+  disableTimerISR = false;
 }
 
+/// ----------------------------------------------------------------------------------------------------
+/// Handle a single command 
+/// ----------------------------------------------------------------------------------------------------
+void handleCommand( String cmd, String arg1, String arg2 )
+{
+        if ( cmd == "ALIVE" )
+        {
+            Serial.println( "Yes, I'm here" );
+        }
+        else if ( cmd == "STAT" )
+        {
+            Serial.print( "Temp. = " );
+            Serial.print( temperature );
+            Serial.println( configuration.temperatureMode  );
+
+            Serial.print( "Gear = " );
+            if ( gear == 0 )
+                Serial.println( "N" );
+            else
+                Serial.println( gear );
+            Serial.print( "GearPos = " ); Serial.print( gearPositionVolts ); Serial.println( "V" );
+
+            Serial.print( "Batt. Level = " );
+            Serial.print( battLevel ); Serial.println( "V" );
+
+            Serial.print( "LCD Initialized: " ); Serial.println( lcdInitialized ) ;
+            Serial.print( "LCD Back Light = " ); Serial.println( lcdBackLight );
+            Serial.print( "LCD Contrast = " ); Serial.println( lcdContrast );
+            Serial.print( "Photo Cell = " ); Serial.println( photoCellLevel ); 
+            // Important Note: for some unknown reason, the serial printing cannot be too large. It seems that the Serial buffer size is limited. Flush() doesn't do what its supposed to do.
+            //       Keep it short, or maybe add some delay to let the stream clear itself.
+        }
+        else if ( cmd == "CONFIG" )
+        {
+           printConfiguration(); 
+        }
+       
+        else if ( cmd == "SETCFG" )
+        {
+            if ( arg1.length() == 0 )
+                Serial.println( "Syntax error: arg1" );
+            else if ( arg2.length() == 0 )
+                Serial.println( "Syntax error: arg2" );
+            else            
+            {
+                if ( arg1 == "TEMP" )
+                {
+                     char tempMode = arg2[0];
+                     if ( configuration.temperatureMode != tempMode )
+                     {
+                        configuration.temperatureMode = tempMode;
+                        // Recalc last temperature to avoid restarting DS1631
+                        if ( tempMode == 'F' )
+                            lastTemperature = toFahrenheight( temperature ); 
+                        else
+                           lastTemperature = toCelsius( temperature );
+                        
+                        writeConfiguration();
+                        
+                        isForceRefreshTemp = true;
+                        temperatureTimedAction.force();
+
+                        Serial.print( "Temperature mode set to: " ); Serial.println( tempMode );
+                        
+                    }
+                    else
+                    {
+                        Serial.print( "Nothing done - Temp already set to: " );Serial.println( tempMode );
+                    }           
+                }
+                else
+                {
+                    Serial.print( "Unkonwn token2: " ); Serial.println( arg1 );
+                }
+            }
+        }
+        else
+        {
+            Serial.print( "Unknown command: " );
+            Serial.println( "SYNTAX: CMD [ARG1] [ARG2];" );
+            Serial.println( "   CMD = {ALIVE | STAT | SETCFG}" );
+        }
+}
+
+/// ----------------------------------------------------------------------------------------------------
+/// Setups the EEPROM configuration values - read, initialize/upgrade if needed
+/// ----------------------------------------------------------------------------------------------------
 void setupConfiguration()
 {
     // Read configuration from EEPROM
     EEPROM_readAnything( EEPROM_CONFIG_MEMOFFSET, configuration );
     printConfiguration();
     
-    if ( configuration.isValidConfig != 12345 )
+    if ( configuration.isValidConfig < EEPROM_STRUCT_VER || configuration.isValidConfig  > EEPROM_STRUCT_VER + 1000 )
     {       
         // First time configuration - set & write defaults to EEPROM
-        configuration.isValidConfig = 12345;
+        configuration.isValidConfig = EEPROM_STRUCT_VER;
         configuration.temperatureMode = DEFAULT_TEMPERATURE_MODE;
      
         writeConfiguration();
     }
+    else
+    {
+        // TODO: Check if upgrade to structure is needed
+    }
 }
 
+/// ----------------------------------------------------------------------------------------------------
+/// Writes the the current configuration values into the EEPROM storage
+/// ----------------------------------------------------------------------------------------------------
 void writeConfiguration()
 {
     EEPROM_writeAnything( EEPROM_CONFIG_MEMOFFSET, configuration );        
 }
     
-
+/// ----------------------------------------------------------------------------------------------------
+/// Prints the current configuration values
+/// ----------------------------------------------------------------------------------------------------
 void printConfiguration()
 {
     Serial.println( "-- CONFIG -- " );

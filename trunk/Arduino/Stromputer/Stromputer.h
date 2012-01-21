@@ -40,7 +40,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.25"
+#define VERSION "0.26"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
@@ -70,6 +70,8 @@
 byte lcdBackLight = 4; // LCD back light (brightness)
 byte lastLcdBackLight = 4; // Ranges in NHD LCD from 1..8 (Very Dim..Very Bright)
 byte lcdContrast = 50; // 0..50 (no contrast .. high contrast)
+
+bool lcdInitialized = false;
 
 // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
 LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
@@ -184,10 +186,11 @@ LED onBoardLed = LED();
 #define IsBetween( x, a, b ) ( x >= a && x <= b ? 1 : 0 )
 
 #define EEPROM_CONFIG_MEMOFFSET 16
+#define EEPROM_STRUCT_VER 10000
 
 struct config_t
 {
-    int isValidConfig; // Should be 12345 when valid
+    int isValidConfig; // Should be >= 10000 || <= 11000 when valid (1000 structure versions allowed)
     char temperatureMode; // F or C
 } configuration;
 

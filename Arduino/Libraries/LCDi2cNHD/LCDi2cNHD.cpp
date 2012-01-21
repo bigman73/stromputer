@@ -66,15 +66,21 @@ LCDi2cNHD::LCDi2cNHD (uint8_t num_lines,uint8_t num_col,int i2c_address,uint8_t 
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
 
-void LCDi2cNHD::init () {
+bool LCDi2cNHD::init () {
 	
 	Wire.begin();
-	on();
+	// TODO: Check that LCD was initialized properly. on() should return a value, command() should return a value and check endTranmission value, a global flag (initializeError) should be added
+	if ( !on() )
+	{
+		return false;  // error
+	}
+	
 	clear();
 	blink_off();
 	cursor_off(); 
 	home();
 	
+	return true; // success
 }
 
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -106,13 +112,16 @@ void LCDi2cNHD::setDelay (int cmdDelay,int charDelay) {
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
 
-void LCDi2cNHD::command(uint8_t value) {
+bool LCDi2cNHD::command(uint8_t value) {
 
   Wire.beginTransmission(g_i2caddress);
   __Wire_write(0xFE);
   __Wire_write(value);
-  Wire.endTransmission();
+  if ( Wire.endTransmission() ) 
+	return false; // error
   delay(g_cmdDelay);
+  
+  return true; // success
 }
 
 
@@ -197,9 +206,11 @@ void LCDi2cNHD::home(){
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
-void LCDi2cNHD::on(){
-
-      command(0x41);
+bool LCDi2cNHD::on(){
+	if ( !command(0x41) )
+		return false;
+		
+	return true;
 
 }
 

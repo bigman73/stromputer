@@ -15,9 +15,9 @@ public:
 	
 LCDi2cNHD(uint8_t num_lines, uint8_t num_col, int i2c_address, uint8_t display);
 	
-	void command(uint8_t value);
+	bool command(uint8_t value);
 	
-	void init();
+	bool init();
 	
 	void setDelay(int,int);
 	
@@ -37,7 +37,7 @@ LCDi2cNHD(uint8_t num_lines, uint8_t num_col, int i2c_address, uint8_t display);
 	
 	void home();
 	
-	void on();
+	bool on();
 	
 	void off();
 	
@@ -66,9 +66,9 @@ LCDi2cNHD(uint8_t num_lines, uint8_t num_col, int i2c_address, uint8_t display);
 	
 	void load_custom_character(uint8_t char_num, uint8_t *rows);
 	
-	 void setBacklight(uint8_t new_val);
+	void setBacklight(uint8_t new_val);
 	
-	 void setContrast(uint8_t new_val);
+	void setContrast(uint8_t new_val);
 	 
 		
 #endif

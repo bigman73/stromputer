@@ -61,6 +61,7 @@
 // []     0.24 -   1/14/2012 + Added Serial Commands, removed serial debug
 // []     0.25 -   1/14/2012 + Added Non-Volatile EEPROM configuration (remains after power is shut off, read when rebooting)
 // []     0.26 -   1/21/2012 + Fixed I2C Error Handling, more EEPROM configurations
+// []     0.27 -   1/22/2012 + Fixed some bugs - ISR was disabled on each serial processing, MILETONE: Successful 2ND deployment to V-Strom
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -104,7 +105,7 @@
 // ---------------- Timed Actions (Scheduled re-occouring Events) -------------
 
 // Timed action for forced LCD update
-TimedAction forceLCDRefreshTimedAction = TimedAction( 0, LCD_FORCEREFRESH_INTERVAL / 2 , forceLCDRefresh );
+TimedAction checkForceLCDRefreshTimedAction = TimedAction( 0, LCD_FORCEREFRESH_INTERVAL / 2 , checkForceLCDRefresh );
 
 // Timed action for processing battery level
 TimedAction battLevelTimedAction = TimedAction( -999999, PROCESS_BATT_LEVEL_TIMED_INTERVAL , processBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
@@ -153,6 +154,8 @@ void setup()
     Timer1.initialize( 1000 );  // 1000 microseconds = 1 msec = 1000hz
     Timer1.attachInterrupt( timerISR ); // attach the service routine here
  
+    forceLCDRefresh( true );
+     
     Serial.println( ">> Stromputer ON. Ready to Rock! <<" );
 }
 
@@ -173,9 +176,9 @@ void loop()
 /// --------------------------------------------------------------------------
 void lcdDisplayLoop()
 {
-    Serial.print("*");
+//    Serial.print("*");
     // Timed Actions ("Events")
-    forceLCDRefreshTimedAction.check();
+    checkForceLCDRefreshTimedAction.check();
     battLevelTimedAction.check();       
     temperatureTimedAction.check();
     photoCellTimedAction.check();
@@ -231,13 +234,21 @@ void timerISR()
 }
 
 /// --------------------------------------------------------------------------
-/// Timed Action Event handler for forceLCDRefreshTimedAction - 
+/// Timed Action Event handler for checkForceLCDRefreshTimedAction - 
 ///     Triggers a full screen refresh of the NHD LCD 
 /// --------------------------------------------------------------------------
-void forceLCDRefresh()
+void checkForceLCDRefresh()
+{
+    forceLCDRefresh( false );
+}
+
+/// --------------------------------------------------------------------------
+/// Force LCD Refresh
+/// --------------------------------------------------------------------------
+void forceLCDRefresh( bool forceNow )
 {
     // Force full screen LCD refresh every X seconds (some unknown bug with NHD LCD causes it to clear the screen from time to time)
-    if ( millis() - lastForceLCDRefreshMillis > LCD_FORCEREFRESH_INTERVAL )
+    if ( forceNow || ( millis() - lastForceLCDRefreshMillis > LCD_FORCEREFRESH_INTERVAL ) )
     {
         isForceRefreshTemp = true;
         isForceRefreshBatt = true;
@@ -307,10 +318,11 @@ void processBatteryLevel()
 {   
     readBatteryLevelAnalog();
     
-    // When 'live' on the motorcycle, there is a 0.49V difference between what Arduino samples and what a volt meter samples.
+    // When 'live' on the motorcycle, there is a 0.9V difference between what Arduino samples and what a volt meter samples.
     // TODO: Figure out the difference, probably due to a diode somewhere
-    // As a temporary workaround, 0.49V are added as a constant
-    // battLevel += 0.49f;
+    // As a temporary workaround, 0.9V are added as a constant
+    if ( battLevel > 1.5f )
+        battLevel += 0.9f;
     
     printBatteryLevel();
 }
@@ -572,10 +584,10 @@ void updateGearLEDs()
     // Update each gear led, only if not in error mode
     if ( gear != GEAR_ERROR )
     {
-        ledBrightnessGreen = 1 + lcdBackLight; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
-        ledBrightnessYellow = 1 + lcdBackLight * 6; // PWM 0..255 : 0%-100%
-        ledBrightnessWhite = 1 + lcdBackLight * 12; // PWM 0..255 : 0%-100%
-        ledBrightnessBlue = 1 + lcdBackLight * 6; // PWM 0..255 : 0%-100%
+        ledBrightnessGreen = 1 + lcdBackLight * 2; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
+        ledBrightnessYellow = 1 + lcdBackLight * 12; // PWM 0..255 : 0%-100%
+        ledBrightnessWhite = 1 + lcdBackLight * 24; // PWM 0..255 : 0%-100%
+        ledBrightnessBlue = 1 + lcdBackLight * 12; // PWM 0..255 : 0%-100%
       
          // Do not handle N gear, the ISR will take care of it
         if ( gear != GEAR_NEUTRAL )
@@ -613,7 +625,7 @@ void processTemperature()
    
     // Workaround to a problem with DS1631: From time to time, the IC goes nuts and starts returning odd readings (TODO: Check if related to pull up resistor values, or breadboard, or the generic IC socket
     // Check if DS1631 is returning bad temperature vlaues (but not on boot last temperature is set to -99), if yes, re-establish communication with it
-    if ( !temperatureReadError && lastTemperature > -55 && abs( lastTemperature - temperature ) > 30 )
+    if ( !temperatureReadError && lastTemperature > TEMPERATURE_MIN_VALID && abs( lastTemperature - temperature ) > TEMPERATURE_ERROR_DIFF )
     {
         // Re-Initialize DS1631 - Stop temperature conversion, and start it again
         initializeDS1631();
@@ -945,7 +957,7 @@ void showWelcome()
     testGearLEDs();
 
     String line2 = String(Welcome1_Line2);
-    line2 = line2 + VERSION;
+    line2 += VERSION;
     printWelcomeScreen(String(Welcome1_Line1), line2, 800, 25, DIRECTION_RIGHT );
    
     #endif    
@@ -958,7 +970,10 @@ void printWelcomeScreen( String line1, String line2, int showDelay, int scrollDe
 {
     Serial.println( ">> Show Welcome - BEGIN.." );     
 
+    lcd.clear();
+    
     // Print line 1
+    lcd.setCursor( 0, 0 );
     lcd.print( line1 );       
     // Print line 2
     lcd.setCursor( 1,0 );
@@ -989,19 +1004,20 @@ const char *commandArgDelimiter = " ";
 /// ----------------------------------------------------------------------------------------------------
 void processSerialInput()
 { 
-  disableTimerISR = true;
-
   while (Serial.available() > 0) 
   {
     byte ch = ( byte ) Serial.read();
     
     if ( ch == ( byte ) ';' )
     {      
+        disableTimerISR = true;
+   
         // handle command line
         serialCommandLine.toUpperCase();
         Serial.println();
         Serial.print( "Recieved: " ); Serial.println( serialCommandLine );
         
+        // Parse command line into tokens
         serialCommandLine.concat( commandArgDelimiter ); // To ensure that the last token is read stopping properly
         char commandLine[30];
         serialCommandLine.toCharArray( commandLine, 30 );
@@ -1030,9 +1046,15 @@ void processSerialInput()
         handleCommand( cmd, arg1, arg2 );
         
         Serial.println();
+
+        Serial.flush();
+        delay( 100 );
+        disableTimerISR = false;
     }
     else
     {
+        // A regular character - add it to the command line
+        
         // Protect against commands which are too long
         if ( serialCommandLine.length() >= 30 )
         {
@@ -1042,10 +1064,6 @@ void processSerialInput()
          serialCommandLine += ( char ) ch;
     }
   }
-
-  Serial.flush();
-  delay( 50 );
-  disableTimerISR = false;
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -1085,6 +1103,13 @@ void handleCommand( String cmd, String arg1, String arg2 )
            printConfiguration(); 
         }
        
+        else if ( cmd == "TEST" )
+        {
+           showWelcome(); 
+           // Force immediate refresh
+           forceLCDRefresh( true );
+        }
+       
         else if ( cmd == "SETCFG" )
         {
             if ( arg1.length() == 0 )
@@ -1110,12 +1135,12 @@ void handleCommand( String cmd, String arg1, String arg2 )
                         isForceRefreshTemp = true;
                         temperatureTimedAction.force();
 
-                        Serial.print( "Temperature mode set to: " ); Serial.println( tempMode );
+                        Serial.print( "Temp mode set to: " ); Serial.println( tempMode );
                         
                     }
                     else
                     {
-                        Serial.print( "Nothing done - Temp already set to: " );Serial.println( tempMode );
+                        Serial.print( "Nothing done" );
                     }           
                 }
                 else
@@ -1126,9 +1151,8 @@ void handleCommand( String cmd, String arg1, String arg2 )
         }
         else
         {
-            Serial.print( "Unknown command: " );
             Serial.println( "SYNTAX: CMD [ARG1] [ARG2];" );
-            Serial.println( "   CMD = {ALIVE | STAT | SETCFG}" );
+            Serial.println( "   CMD = {ALIVE | TEST | STAT | SETCFG}" );
         }
 }
 

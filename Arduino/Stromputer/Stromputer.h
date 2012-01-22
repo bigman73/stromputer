@@ -40,7 +40,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.26"
+#define VERSION "0.27"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
@@ -113,8 +113,8 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 #define GEAR5_FROM_VOLTS 4.10f - 0.35f
 #define GEAR5_TO_VOLTS   4.10f + 0.20f
 #define GEAR6_FROM_VOLTS 4.55f - 0.20f
-#define GEAR6_TO_VOLTS   4.55f + 0.20f
-#define GEARN_FROM_VOLTS 5.00f - 0.20f
+#define GEAR6_TO_VOLTS   4.55f + 0.15f
+#define GEARN_FROM_VOLTS 5.00f - 0.25f
 #define GEARN_TO_VOLTS   5.00f + 0.50f
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -224,7 +224,6 @@ short LoopSleepTime = 5; // msec
 #define LCD_FORCEREFRESH_INTERVAL 5000
 
 long lastForceLCDRefreshMillis = 0;
-
 bool isForceRefreshBatt = true;
 bool isForceRefreshGear = true;
 bool isForceRefreshTemp = true;
@@ -244,6 +243,10 @@ bool isForceRefreshTemp = true;
 // RG1: 33Kohm, Real measured value: 32.4KOhm
 // RG2: 33Kohm, Real measured value: 32.4KOhm
 #define GEAR_VOLT_DIVIDER ( 32400.0f + 32400.0f ) / 32400.0f
+
+#define TEMPERATURE_ERROR_DIFF 30
+#define TEMPERATURE_MIN_VALID -55
+    
 
 // --------------------------------------------------------------------------
 

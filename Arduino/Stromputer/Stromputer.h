@@ -40,14 +40,14 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.27"
+#define VERSION "0.29"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
 #define SHOW_WELCOME
 
 // Comment in/out to enable/disable printing the gear volts
-#define DEBUG_PRINT_GEARVOLTS
+// #define DEBUG_PRINT_GEARVOLTS
 
 // Comment in/out to enable/disable PCF8591 DAC Gear Emulation (Automatic increment from 0..5V in loops)
 //#define PCF8591_DAC_GEAR_EMULATOR
@@ -103,11 +103,11 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 // ^^^^^^^^^^^   Gear mapping voltage values ^^^^^^^^^^^
 // Note: DL-650 gear shows 0V on 1st gear, when bike engine is off, but switch is on. Only when engaged to N for first time, then the 1st gear reading becomes 1.33.
 #define GEAR1_FROM_VOLTS 0.00f
-#define GEAR1_TO_VOLTS   1.33f + 0.17f
-#define GEAR2_FROM_VOLTS 1.77f - 0.17f
-#define GEAR2_TO_VOLTS   1.77f + 0.30f
-#define GEAR3_FROM_VOLTS 2.50f - 0.30f
-#define GEAR3_TO_VOLTS   2.50f + 0.30f
+#define GEAR1_TO_VOLTS   1.33f + 0.25f
+#define GEAR2_FROM_VOLTS 1.82f - 0.12f
+#define GEAR2_TO_VOLTS   1.82f + 0.30f
+#define GEAR3_FROM_VOLTS 2.55f - 0.30f
+#define GEAR3_TO_VOLTS   2.55f + 0.30f
 #define GEAR4_FROM_VOLTS 3.23f - 0.30f
 #define GEAR4_TO_VOLTS   3.23f + 0.35f
 #define GEAR5_FROM_VOLTS 4.10f - 0.35f
@@ -134,7 +134,7 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 // Photocell level (3K-11K:10K voltage divider) is connected to Analog Pin 2
 #define ANALOGPIN_PHOTCELL 2
 
-// --- Ethernet Cable #1 ( 'Blue' sheath )
+// --- Ethernet Cable #1 ( 'Blue' sheath, right ethernet port )
 //
 // Note: 6 Digital outputs will be used for Gear LEDs - a total of 6 pins, each pin dedicated to a gear respectively. 
 //       All LEDs pins are PWM (to allow LED Dimming)
@@ -167,7 +167,7 @@ LED onBoardLed = LED();
 
 // --------------------------------------------------------------------------
 
-// --- Ethernet Cable #2 ( 'Gray' sheath )
+// --- Ethernet Cable #2 ( 'Gray' sheath, left ethernet )
 //
 //   Wire Color   |   Description
 // ---------------------------------------------------

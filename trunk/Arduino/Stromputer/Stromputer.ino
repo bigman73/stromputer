@@ -62,6 +62,7 @@
 // []     0.25 -   1/14/2012 + Added Non-Volatile EEPROM configuration (remains after power is shut off, read when rebooting)
 // []     0.26 -   1/21/2012 + Fixed I2C Error Handling, more EEPROM configurations
 // []     0.27 -   1/22/2012 + Fixed some bugs - ISR was disabled on each serial processing, MILETONE: Successful 2ND deployment to V-Strom
+// []     0.28 -   1/23/2012 + Fixed transient/fake Neutral
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -108,13 +109,13 @@
 TimedAction checkForceLCDRefreshTimedAction = TimedAction( 0, LCD_FORCEREFRESH_INTERVAL / 2 , checkForceLCDRefresh );
 
 // Timed action for processing battery level
-TimedAction battLevelTimedAction = TimedAction( -999999, PROCESS_BATT_LEVEL_TIMED_INTERVAL , processBatteryLevel ); // Prev = -999999 == > Force  first time update without waiting
+TimedAction battLevelTimedAction = TimedAction( 0, PROCESS_BATT_LEVEL_TIMED_INTERVAL , processBatteryLevel );
 // Timed action for processing temperature
-TimedAction temperatureTimedAction = TimedAction( -999999, PROCESS_TEMP_TIMED_INTERVAL, processTemperature );
+TimedAction temperatureTimedAction = TimedAction( 0, PROCESS_TEMP_TIMED_INTERVAL, processTemperature );
 // Timed action for processing photo cell light 
-TimedAction photoCellTimedAction = TimedAction( -999999, PROCESS_PHOTO_CELL_TIMED_INTERVAL, processPhotoCell );
+TimedAction photoCellTimedAction = TimedAction( 0, PROCESS_PHOTO_CELL_TIMED_INTERVAL, processPhotoCell );
 // Timed action for Sampling & LCD Display
-TimedAction lcdDisplayTimedAction = TimedAction( -999999, LCD_DISPLAY_LOOP_TIMED_INTERVAL, lcdDisplayLoop );
+TimedAction lcdDisplayTimedAction = TimedAction( 0, LCD_DISPLAY_LOOP_TIMED_INTERVAL, lcdDisplayLoop );
 
 // Timed action for Serial Input
 TimedAction serialInputTimedAction = TimedAction( 0, 100, processSerialInput );
@@ -176,7 +177,6 @@ void loop()
 /// --------------------------------------------------------------------------
 void lcdDisplayLoop()
 {
-//    Serial.print("*");
     // Timed Actions ("Events")
     checkForceLCDRefreshTimedAction.check();
     battLevelTimedAction.check();       
@@ -486,11 +486,15 @@ void readGearPositionAnalog()
     gearReadError = false; // Clear read error - we made it here
 }
 
+long neutralStartMillis = 0;
+
 // ----------------------------------------------------------------------------------------------------
 /// Determins the current gear from the gear position volts
 /// ----------------------------------------------------------------------------------------------------
 void determineCurrentGear()
 {
+     bool isNeutral = false;
+     
      if ( IsBetween( gearPositionVolts, GEAR1_FROM_VOLTS, GEAR1_TO_VOLTS ) )
          gear = 1;
      else if ( IsBetween( gearPositionVolts, GEAR2_FROM_VOLTS, GEAR2_TO_VOLTS ) )
@@ -504,9 +508,30 @@ void determineCurrentGear()
      else if ( IsBetween( gearPositionVolts, GEAR6_FROM_VOLTS, GEAR6_TO_VOLTS ) )
          gear = 6;
      else if ( IsBetween( gearPositionVolts, GEARN_FROM_VOLTS, GEARN_TO_VOLTS ) )
-         gear = GEAR_NEUTRAL;  // Neutral
+     {
+         isNeutral = true;
+         
+         // Start the neutral time count, but do NOT shift to N
+         // Only after Neutral has been persistent long enough, let it go through
+         //  This should eliminate transient 'Fake' Neutral readings, that occur between shifting of gears.
+         if ( neutralStartMillis == 0 )
+         {
+             neutralStartMillis = millis();
+         }
+         // Now that Neutral has shown it is persistent, set the gear as N
+         else if ( millis() - neutralStartMillis > 250)
+         {
+             gear = GEAR_NEUTRAL;  // "Real"/Stable Neutral
+         }
+     }
      else
          gear = GEAR_ERROR; // Default: Error
+         
+     // Reset the neutral start count for all *actual* gear shifts other than Neutral
+     if ( !isNeutral && neutralStartMillis > 0 )
+     {
+         neutralStartMillis = 0; // Reset Neutral start time stamp
+     }
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -584,10 +609,18 @@ void updateGearLEDs()
     // Update each gear led, only if not in error mode
     if ( gear != GEAR_ERROR )
     {
-        ledBrightnessGreen = 1 + lcdBackLight * 2; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
-        ledBrightnessYellow = 1 + lcdBackLight * 12; // PWM 0..255 : 0%-100%
-        ledBrightnessWhite = 1 + lcdBackLight * 24; // PWM 0..255 : 0%-100%
-        ledBrightnessBlue = 1 + lcdBackLight * 12; // PWM 0..255 : 0%-100%
+        byte factor;
+        if ( lcdBackLight <=4 )
+            // Night
+            factor = 1;
+        else
+            // Day
+            factor = 3;
+        
+        ledBrightnessGreen = 1 + lcdBackLight * factor; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
+        ledBrightnessYellow = 1 + lcdBackLight * factor * 4; // PWM 0..255 : 0%-100%
+        ledBrightnessWhite = 1 + lcdBackLight * factor * 12; // PWM 0..255 : 0%-100%
+        ledBrightnessBlue = 1 + lcdBackLight * factor * 6; // PWM 0..255 : 0%-100%
       
          // Do not handle N gear, the ISR will take care of it
         if ( gear != GEAR_NEUTRAL )

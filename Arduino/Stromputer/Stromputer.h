@@ -40,7 +40,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.29"
+#define VERSION "0.30"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
@@ -104,14 +104,14 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 // Note: DL-650 gear shows 0V on 1st gear, when bike engine is off, but switch is on. Only when engaged to N for first time, then the 1st gear reading becomes 1.33.
 #define GEAR1_FROM_VOLTS 0.00f
 #define GEAR1_TO_VOLTS   1.33f + 0.25f
-#define GEAR2_FROM_VOLTS 1.82f - 0.12f
+#define GEAR2_FROM_VOLTS 1.82f - 0.22f
 #define GEAR2_TO_VOLTS   1.82f + 0.30f
 #define GEAR3_FROM_VOLTS 2.55f - 0.30f
-#define GEAR3_TO_VOLTS   2.55f + 0.30f
+#define GEAR3_TO_VOLTS   2.55f + 0.35f
 #define GEAR4_FROM_VOLTS 3.23f - 0.30f
-#define GEAR4_TO_VOLTS   3.23f + 0.35f
+#define GEAR4_TO_VOLTS   3.23f + 0.40f
 #define GEAR5_FROM_VOLTS 4.10f - 0.35f
-#define GEAR5_TO_VOLTS   4.10f + 0.20f
+#define GEAR5_TO_VOLTS   4.10f + 0.23f
 #define GEAR6_FROM_VOLTS 4.55f - 0.20f
 #define GEAR6_TO_VOLTS   4.55f + 0.15f
 #define GEARN_FROM_VOLTS 5.00f - 0.25f
@@ -205,13 +205,18 @@ float lastTemperature = -99; // Force initial update
 byte temperatureReadError = 0;
 
 short gear = 0;               // 0 = Neutral, or 1-6
+long transientGearStartMillis = 0;
+short transientGear = GEAR_ERROR;
 short lastGearLCD = -2;          // Force initial update
 short lastGearLED = -2;       // Force initial update
 float gearVolts[] = { 5, 4.5, 4.8, 4.3 };
 byte gearReadError = 0;
 float gearPositionVolts = 0;
+
+#ifdef MANUAL_GEAR_EMULATION
 bool gearButtonTriggered = true; // Used to ensure that a tactile button has to be released up, before the system handles the next button down event ("Click")
- 
+#endif
+
 float battLevel;             // Volts
 float lastBattLevel = -0.1;  // Force initial update
 byte battReadError = 0;
@@ -219,9 +224,6 @@ byte battReadError = 0;
 short photoCellLevel;
 
 short LoopSleepTime = 5; // msec
-
-// msec
-#define LCD_FORCEREFRESH_INTERVAL 5000
 
 long lastForceLCDRefreshMillis = 0;
 bool isForceRefreshBatt = true;
@@ -231,9 +233,10 @@ bool isForceRefreshTemp = true;
 // Intervals for Timed Actions - in msec
 #define PROCESS_BATT_LEVEL_TIMED_INTERVAL 2000
 #define PROCESS_TEMP_TIMED_INTERVAL 2000
-#define PROCESS_PHOTO_CELL_TIMED_INTERVAL 1500
+#define PROCESS_PHOTO_CELL_TIMED_INTERVAL 3000
 #define LCD_DISPLAY_LOOP_TIMED_INTERVAL 250
-
+#define LCD_FORCEREFRESH_INTERVAL 5000
+#define SERIALINPUT_TIMED_INTERVAL 100
 
 #define ARDUINO_VIN_VOLTS 4.9f
 // RB1: 39Kohm, Real measured value: 38.2KOhm
@@ -243,6 +246,9 @@ bool isForceRefreshTemp = true;
 // RG1: 33Kohm, Real measured value: 32.4KOhm
 // RG2: 33Kohm, Real measured value: 32.4KOhm
 #define GEAR_VOLT_DIVIDER ( 32400.0f + 32400.0f ) / 32400.0f
+
+// msec
+#define MIN_TRANSIENTGEAR_INTERVAL 100
 
 #define TEMPERATURE_ERROR_DIFF 30
 #define TEMPERATURE_MIN_VALID -55

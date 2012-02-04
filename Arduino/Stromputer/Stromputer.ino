@@ -118,7 +118,7 @@ TimedAction photoCellTimedAction = TimedAction( 0, PROCESS_PHOTO_CELL_TIMED_INTE
 TimedAction lcdDisplayTimedAction = TimedAction( 0, LCD_DISPLAY_LOOP_TIMED_INTERVAL, lcdDisplayLoop );
 
 // Timed action for Serial Input
-TimedAction serialInputTimedAction = TimedAction( 0, 100, processSerialInput );
+TimedAction serialInputTimedAction = TimedAction( 0, SERIALINPUT_TIMED_INTERVAL, processSerialInput );
 
 /// --------------------------------------------------------------------------
 /// Arduino one-time setup routine - i.e. Program entry point like main()
@@ -211,7 +211,7 @@ void timerISR()
         onBoardLed.toggle();
     }
 
-    // Handle gears at 20Hz
+    // Handle gears at 20Hz (i.e. check every 50 msec)
     if ( timerDivider % 50 == 1 ) 
     {
         // Handle gear position read
@@ -486,51 +486,47 @@ void readGearPositionAnalog()
     gearReadError = false; // Clear read error - we made it here
 }
 
-long neutralStartMillis = 0;
-
 // ----------------------------------------------------------------------------------------------------
 /// Determins the current gear from the gear position volts
 /// ----------------------------------------------------------------------------------------------------
 void determineCurrentGear()
 {
-     bool isNeutral = false;
-     
+     short lastTransientGear = transientGear;
+
      if ( IsBetween( gearPositionVolts, GEAR1_FROM_VOLTS, GEAR1_TO_VOLTS ) )
-         gear = 1;
+         transientGear = 1;
      else if ( IsBetween( gearPositionVolts, GEAR2_FROM_VOLTS, GEAR2_TO_VOLTS ) )
-         gear = 2;
+         transientGear = 2;
      else if ( IsBetween( gearPositionVolts, GEAR3_FROM_VOLTS, GEAR3_TO_VOLTS ) )
-         gear = 3;
+         transientGear = 3;
      else if ( IsBetween( gearPositionVolts, GEAR4_FROM_VOLTS, GEAR4_TO_VOLTS ) )
-         gear = 4;
+         transientGear = 4;
      else if ( IsBetween( gearPositionVolts, GEAR5_FROM_VOLTS, GEAR5_TO_VOLTS ) )
-         gear = 5;
+         transientGear = 5;
      else if ( IsBetween( gearPositionVolts, GEAR6_FROM_VOLTS, GEAR6_TO_VOLTS ) )
-         gear = 6;
+         transientGear = 6;
      else if ( IsBetween( gearPositionVolts, GEARN_FROM_VOLTS, GEARN_TO_VOLTS ) )
-     {
-         isNeutral = true;
-         
-         // Start the neutral time count, but do NOT shift to N
-         // Only after Neutral has been persistent long enough, let it go through
-         //  This should eliminate transient 'Fake' Neutral readings, that occur between shifting of gears.
-         if ( neutralStartMillis == 0 )
-         {
-             neutralStartMillis = millis();
-         }
-         // Now that Neutral has shown it is persistent, set the gear as N
-         else if ( millis() - neutralStartMillis > 250)
-         {
-             gear = GEAR_NEUTRAL;  // "Real"/Stable Neutral
-         }
-     }
+         transientGear = GEAR_NEUTRAL;
      else
-         gear = GEAR_ERROR; // Default: Error
+         transientGear = GEAR_ERROR; // Default: Error
          
-     // Reset the neutral start count for all *actual* gear shifts other than Neutral
-     if ( !isNeutral && neutralStartMillis > 0 )
+     // If transient gear has changed, do not allow it to stablize
+     if ( lastTransientGear != transientGear )
      {
-         neutralStartMillis = 0; // Reset Neutral start time stamp
+         // Reset the transient start counter
+         transientGearStartMillis = millis();
+         lastTransientGear = transientGear;
+     }
+     else // Transient gear is the same since last time
+     {
+         int deltaTransientMillis = millis() - transientGearStartMillis;
+         // check if it was stable long enough
+         if ( deltaTransientMillis > MIN_TRANSIENTGEAR_INTERVAL )
+         {
+             // Make transient gear change a stable gear change
+             gear = transientGear;
+             transientGear = GEAR_ERROR;
+         }
      }
 }
 
@@ -610,7 +606,7 @@ void updateGearLEDs()
     if ( gear != GEAR_ERROR )
     {
         byte factor;
-        if ( lcdBackLight <=4 )
+        if ( lcdBackLight < 4 )
             // Night
             factor = 1;
         else
@@ -619,7 +615,7 @@ void updateGearLEDs()
         
         ledBrightnessGreen = 1 + lcdBackLight * factor; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
         ledBrightnessYellow = 1 + lcdBackLight * factor * 4; // PWM 0..255 : 0%-100%
-        ledBrightnessWhite = 1 + lcdBackLight * factor * 12; // PWM 0..255 : 0%-100%
+        ledBrightnessWhite = 75 + lcdBackLight * factor * 7; // PWM 0..255 : 0%-100%
         ledBrightnessBlue = 1 + lcdBackLight * factor * 6; // PWM 0..255 : 0%-100%
       
          // Do not handle N gear, the ISR will take care of it
@@ -905,6 +901,28 @@ void testGearLEDs()
     }
 }
 
+/// ------------------------------------------------------------
+/// Tests each gear LED
+/// ------------------------------------------------------------
+void testEachGearLED()
+{
+    Serial.println( ">> Test each Gear LED" );
+        
+    for ( int i=0; i < 1; i++ )
+    {
+        for ( int j=0; j <6 ; j++ )
+        {
+            for ( int k=255; k>= 0; k-=6 )            
+            {
+                ledGears[ j ].setValue(k);
+                delay( 100 );
+            }
+            ledGears[ j ].off();
+            delay( 200 );            
+        }
+    }
+}
+
 /// --------------------------------------------------------------------------
 /// Initialize the NHD LCD (I2C IC)
 /// --------------------------------------------------------------------------
@@ -1142,7 +1160,10 @@ void handleCommand( String cmd, String arg1, String arg2 )
            // Force immediate refresh
            forceLCDRefresh( true );
         }
-       
+        else if ( cmd == "TESTLEDS" )
+        {
+            testEachGearLED();
+        }
         else if ( cmd == "SETCFG" )
         {
             if ( arg1.length() == 0 )

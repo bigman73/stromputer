@@ -1,0 +1,38 @@
+#######################################
+# Syntax Coloring Map For LCDi2cNHD
+# Added by Yuval Naveh 2011
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+LCDi2cNHD                      KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+command                        KEYWORD2
+init                           KEYWORD2
+setDelay                       KEYWORD2
+clear                          KEYWORD2
+home                           KEYWORD2
+on                             KEYWORD2
+off                            KEYWORD2
+cursor_on                      KEYWORD2
+cursor_off                     KEYWORD2
+blink_on                       KEYWORD2
+blink_off                      KEYWORD2
+setCursor                      KEYWORD2
+load_custom_character          KEYWORD2
+setBacklight                   KEYWORD2
+setContrast                    KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+g_num_lines                    LITERAL1
+g_num_col                      LITERAL1
+g_i2caddress                   LITERAL1

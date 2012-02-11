@@ -1,0 +1,152 @@
+/*
+    Stromputer - Enhanced display for Suzuki V-Strom Motorcycles (DL-650, DL-1000, years 2004-2011)
+    Copyright (C) 2011 Yuval Naveh
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/*
+ .::::::.:::::::::::::::::::..       ...     .        :::::::::::. ...    :::::::::::::::.,:::::: :::::::..   
+;;;`    `;;;;;;;;'''';;;;``;;;;   .;;;;;;;.  ;;,.    ;;;`;;;```.;;;;;     ;;;;;;;;;;;'''';;;;'''' ;;;;``;;;;  
+'[==/[[[[,    [[      [[[,/[[['  ,[[     \[[,[[[[, ,[[[[,`]]nnn]]'[['     [[[     [[      [[cccc   [[[,/[[['  
+  '''    $    $$      $$$$$$c    $$$,     $$$$$$$$$$$"$$$ $$$""   $$      $$$     $$      $$""""   $$$$$$c    
+ 88b    dP    88,     888b "88bo,"888,_ _,88P888 Y88" 888o888o    88    .d888     88,     888oo,__ 888b "88bo,
+  "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
+*/
+
+Battery Voltage Divider (A0)
+-----------------------------
+B7:P7 - Jumper Battry (+)/POS  
+P6:P4 - RB1 = 39KOhm
+P3:M3 (GND) - RB2 = 120KOhm
+
+Gear Voltage Divider (A1)
+--------------------------
+
+Q7 - Gear Position Sensor wire [Pink wire on V-Strom, Green wire]
+Q6:Q4 - RG1 = 33KOhm 
+Q3:M4 (GND) - RG2  = 33KOhm, standing vertically, M4 Exposed wire leg but insulatd with heat shrink
+Q4:Q5 - JUMPER
+
+
+Photo Light Sensor/CdS (A2)
+----------------------------
+Q8 (VDD/5V) - CdS ORANGE-WHITE wire on GREY CABLE, Yellow wire on shield
+R7:R9 (GND) - Rcds = 10KOhm
+R6 - CdS ORANGE wire on GREY CABLE 
+R3:R5 - JUMPER
+
+
+I2C SDA (A4)
+-----------------------
+T4:T8 - Rsck = 10KOhm (Pull-Up resistor)
+
+
+I2C SCK (A5)
+-----------------------
+U4:U8 - Rsda = 10KOhm (Pull-Up resistor)
+
+
+DS1630 (Temp. I2C Sensor)
+----------------------------
+R9  - Pin 1 (SDA)
+S9  - Pin 2 (SCK)
+T9  - Pin 3 (TOUT- Not used)
+Y9  - Pin 4 (GND)
+Y12 - Pin 5 (A2)
+T12 - Pin 6 (A1)
+S9  - Pin 7 (A0)
+R9  - Pin 8 (VDD)
+
+R9:T3 - JUMPER SDA-A4
+S9:U3 - JUMPER SCK-A5
+U9:U8 - JUMPER GND
+U12:U14 - JUMPER A2-GND
+T12:T14 - JUMPER A1-GND
+S12:S14 - JUMPER A0-GND
+R12:R13 - JUMPER VDD-5V
+
+
+
+Power Supply Unit (14V->9V)
+----------------------------
+B5 - VCC (BATT)   [Red Wire, 18 Gauage]
+
+B6:C6 Rin - 16 Ohm (standing vertically), C6 Exposed wire leg but insulatd with heat shrink
+
+C5:E5 (C5 = K/BLACK STRIPE, E6 = A): Dz1 - 14.4V
+
+E7:G9 - GND JUMPER 1
+J5:L3 - GND JUMPER 2
+C7:G7 - VCC JUMPER 1
+G5:I5 - VCC Jumper 2
+
+sLM2940:
+I7: I (Input - 12-20V)
+J7: G (GND)
+K7: (Output - 9V)
+
+Cin1 - 220uF: E6 -, G6 +
+
+Cin2 - 0.47uF: I6:J6
+Cout3 - 22uF: K5 +, L4 -
+
+K6:[VIN PORT] - VIN JUMPER (Purple wire)
+
+
+
+SHIELD SCREW IN PORTS:
+----------------------
+----------------------
+LEFT SIDE:
+----------
+5V  - LCD +, Grey sheith green
+GND - Battery GND
+GND - LCD GND, Grey sheith blue/black
+VIN 
+RST
+3V3
+5V
+GND
+GND
+VIN
+A0
+A1
+A2
+A3
+A4 - SDA (I2C DATA),  Grey sheith white/blue
+A5 - SCK (I2C CLOCK), Grey sheith white/green
+GND
+GND
+
+RIGHT SIDE:
+----------
+AREF
+GND
+D13
+D12
+D11 - GEAR LED6/Blue sheith blue
+D10 - GEAR LED5/Blue sheith white/blue
+D9  - GEAR LED4/Blue sheith white/orange
+D8  
+D7
+D6  - GEAR LED3/Blue sheith orange
+D5  - GEAR LED2/Blue sheith white/green
+D4   
+D3  - GEAR LED1/Blue sheith green
+D2
+TX
+RX
+GND - Blue sheith white/brown
+GND - Blue sheith brown

@@ -40,14 +40,14 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.30"
+#define VERSION "0.31"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
 #define SHOW_WELCOME
 
 // Comment in/out to enable/disable printing the gear volts
-// #define DEBUG_PRINT_GEARVOLTS
+#define DEBUG_PRINT_GEARVOLTS
 
 // Comment in/out to enable/disable PCF8591 DAC Gear Emulation (Automatic increment from 0..5V in loops)
 //#define PCF8591_DAC_GEAR_EMULATOR
@@ -102,20 +102,22 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 
 // ^^^^^^^^^^^   Gear mapping voltage values ^^^^^^^^^^^
 // Note: DL-650 gear shows 0V on 1st gear, when bike engine is off, but switch is on. Only when engaged to N for first time, then the 1st gear reading becomes 1.33.
+
 #define GEAR1_FROM_VOLTS 0.00f
-#define GEAR1_TO_VOLTS   1.33f + 0.25f
-#define GEAR2_FROM_VOLTS 1.82f - 0.22f
-#define GEAR2_TO_VOLTS   1.82f + 0.30f
-#define GEAR3_FROM_VOLTS 2.55f - 0.30f
-#define GEAR3_TO_VOLTS   2.55f + 0.35f
-#define GEAR4_FROM_VOLTS 3.23f - 0.30f
-#define GEAR4_TO_VOLTS   3.23f + 0.40f
-#define GEAR5_FROM_VOLTS 4.10f - 0.35f
-#define GEAR5_TO_VOLTS   4.10f + 0.23f
-#define GEAR6_FROM_VOLTS 4.55f - 0.20f
-#define GEAR6_TO_VOLTS   4.55f + 0.15f
-#define GEARN_FROM_VOLTS 5.00f - 0.25f
-#define GEARN_TO_VOLTS   5.00f + 0.50f
+#define GEAR1_TO_VOLTS   1.05f
+#define GEAR2_FROM_VOLTS 1.15f
+#define GEAR2_TO_VOLTS   1.60f
+#define GEAR3_FROM_VOLTS 1.80f
+#define GEAR3_TO_VOLTS   2.40f
+#define GEAR4_FROM_VOLTS 2.60f
+#define GEAR4_TO_VOLTS   3.00f
+#define GEAR5_FROM_VOLTS 3.30f
+#define GEAR5_TO_VOLTS   3.90f
+#define GEAR6_FROM_VOLTS 4.00f
+#define GEAR6_TO_VOLTS   4.40f
+#define GEARN_FROM_VOLTS 4.50f
+#define GEARN_TO_VOLTS   5.50f
+
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 #define GEAR_NEUTRAL 0
@@ -238,6 +240,9 @@ bool isForceRefreshTemp = true;
 #define LCD_FORCEREFRESH_INTERVAL 5000
 #define SERIALINPUT_TIMED_INTERVAL 100
 
+ // 1000 microseconds = 1 msec = 1000hz
+#define TIMER1_RESOLUTION 1000
+
 #define ARDUINO_VIN_VOLTS 4.9f
 // RB1: 39Kohm, Real measured value: 38.2KOhm
 // RB2: 120Kohm, Real measured value: 118.5KOhm
@@ -251,8 +256,15 @@ bool isForceRefreshTemp = true;
 #define MIN_TRANSIENTGEAR_INTERVAL 100
 
 #define TEMPERATURE_ERROR_DIFF 30
-#define TEMPERATURE_MIN_VALID -55
-    
+#define TEMPERATURE_MIN_VALID -55    
+
+#define PHOTOCELL_LEVEL1 50
+#define PHOTOCELL_LEVEL2 250
+#define PHOTOCELL_LEVEL3 500
+#define PHOTOCELL_LEVEL4 700
+#define PHOTOCELL_LEVEL5 800
+#define PHOTOCELL_LEVEL6 900
+#define PHOTOCELL_LEVEL7 1000    
 
 // --------------------------------------------------------------------------
 
@@ -269,5 +281,32 @@ bool isForceRefreshTemp = true;
 #define BATTERY_LABEL "Batt  "
 #define Welcome1_Line1 "Stromputer-DL650"
 #define Welcome1_Line2 "F/W Ver="
+
+#define CMD_ALIVE      "ALIVE"
+#define CMD_STAT       "STAT"
+#define CMD_CONFIG     "CONFIG"
+#define CMD_TEST       "TEST"
+#define CMD_SETCFG     "SETCFG"
+#define CMD_TESTLEDS   "TESTLEDS"
+
+#define CMD_ARG_TEMP   "TEMP"
+
+#define MSG_STROMPUTER_READY     ">> Stromputer ON. Ready to Rock! <<"
+#define MSG_FIRMWARE             "------- Stromputer, Firmware version: "
+#define MSG_SHOW_ALL_GEAR_LEDS   ">> Show all Gear LEDs" 
+#define MSG_TEST_EACH_GEAR_LED   ">> Test each Gear LED" 
+#define MSG_LCD_INIT_BEGIN       ">> LCD Initializing.." 
+#define MSG_LCD_INIT_END         ">> LCD Initialized"
+#define MSG_DS1631_INIT_BEGIN    ">> DS1631 Initializing.." 
+#define MSG_DS1631_INIT_END      ">> DS1631 Initialized"
+#define MSG_WELCOME_BEGIN        ">> Show Welcome - BEGIN.."
+#define MSG_WELCOME_END          ">> Show Welcome - END"
+#define MSG_SYNTAX_1             "SYNTAX: CMD [ARG1] [ARG2];"
+#define MSG_SYNTAX_2             "   CMD = {ALIVE | TEST | STAT | SETCFG}"
+#define MSG_ISALIVE              "Yes, I'm here" 
+
+#define ERR_LCD_INIT_FAILED      ">> ERROR: LCD failed to initialize"
+#define ERR_DS1631_INIT_FAILED   ">> ERROR: DS1631 failed to initialize" 
+
 
 #endif

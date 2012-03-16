@@ -63,6 +63,8 @@
 // []     0.26 -   1/21/2012 + Fixed I2C Error Handling, more EEPROM configurations
 // []     0.27 -   1/22/2012 + Fixed some bugs - ISR was disabled on each serial processing, MILETONE: Successful 2ND deployment to V-Strom
 // []     0.28 -   1/23/2012 + Fixed transient/fake Neutral
+// []     0.30 -   2/1/2012  + 
+// []     0.31 -   3/10/2012 + Fixed gear voltage ranges (measured on bike)
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -127,7 +129,7 @@ void setup()
 { 
     // Setup Serial connection
     Serial.begin( SERIAL_SPEED );
-    Serial.print( "------- Stromputer, Firmware version: " ); Serial.println( VERSION );
+    Serial.print( MSG_FIRMWARE ); Serial.println( VERSION );
 
     onBoardLed.on();    
     
@@ -135,14 +137,14 @@ void setup()
 
     if ( !initializeLCD() )
     {
-        Serial.println( ">> ERROR: LCD failed to initialize" );
+        Serial.println( ERR_LCD_INIT_FAILED );
     }
 
     showWelcome();
    
     if ( !initializeDS1631() )
     {
-        Serial.println( ">> ERROR: DS1631 failed to initialize" );
+        Serial.println( ERR_DS1631_INIT_FAILED );
     }
     	
     // sets the digital pin of gear tacktile button as input
@@ -151,13 +153,13 @@ void setup()
     pinMode( MANUAL_GEAR_UP_PIN, INPUT );
     #endif
     
-    // set a timer to 62.5 milliseconds (or 16Hz)
-    Timer1.initialize( 1000 );  // 1000 microseconds = 1 msec = 1000hz
+    // set Timer1
+    Timer1.initialize( TIMER1_RESOLUTION );
     Timer1.attachInterrupt( timerISR ); // attach the service routine here
  
     forceLCDRefresh( true );
      
-    Serial.println( ">> Stromputer ON. Ready to Rock! <<" );
+    Serial.println( MSG_STROMPUTER_READY );
 }
 
 
@@ -211,7 +213,7 @@ void timerISR()
         onBoardLed.toggle();
     }
 
-    // Handle gears at 20Hz (i.e. check every 50 msec)
+    // Handle gear LED display at 20Hz (i.e. check every 50 msec)
     if ( timerDivider % 50 == 1 ) 
     {
         // Handle gear position read
@@ -353,7 +355,7 @@ void readBatteryLevelAnalog()
     }
     else
     {
-        // Calculate average voltage, using time window
+        // Calculate average voltage, using moving time window
         battLevel = ( battLevel0 + battLevel1 + battLevel2 ) / 3.0f;
     }
         
@@ -428,19 +430,19 @@ void processPhotoCell()
     readPhotoCellAnalog();
    
     // Determine new LCD Back Light level (1..8, 1 is very dim .. 8 is very bright)
-    if ( photoCellLevel < 50 )
+    if ( photoCellLevel < PHOTOCELL_LEVEL1 )
         lcdBackLight = 1; // Very dim
-    else if ( photoCellLevel < 250 )
+    else if ( photoCellLevel < PHOTOCELL_LEVEL2 )
         lcdBackLight = 2;
-    else if ( photoCellLevel < 500 )
+    else if ( photoCellLevel < PHOTOCELL_LEVEL3 )
         lcdBackLight = 3;
-    else if ( photoCellLevel < 700 )
+    else if ( photoCellLevel < PHOTOCELL_LEVEL4 )
         lcdBackLight = 4;
-    else if ( photoCellLevel < 800 )
+    else if ( photoCellLevel < PHOTOCELL_LEVEL5 )
         lcdBackLight = 5;
-    else if ( photoCellLevel < 900 )
+    else if ( photoCellLevel < PHOTOCELL_LEVEL6 )
         lcdBackLight = 6;
-    else if ( photoCellLevel < 1000 )
+    else if ( photoCellLevel < PHOTOCELL_LEVEL7 )
         lcdBackLight = 7;
     else
         lcdBackLight = 8; // Very bright
@@ -663,7 +665,7 @@ void processTemperature()
         readTemperature();
         
         // If still there are odd readings then declare temperature error mode
-        if ( abs( lastTemperature - temperature ) > 30 )
+        if ( abs( lastTemperature - temperature ) > TEMPERATURE_ERROR_DIFF )
         {
             temperatureReadError = true;
         }
@@ -873,11 +875,11 @@ int controlPCF8591_I2C(byte dac_value, byte adc_values[], byte adcChannelMask )
 #endif
 
 /// ------------------------------------------------------------
-/// Tests the gear LEDs
+/// Show all gear LEDs
 /// ------------------------------------------------------------
-void testGearLEDs()
+void showAllGearLEDs()
 {
-    Serial.println( ">> Test Gear LEDs" );
+    Serial.println( MSG_SHOW_ALL_GEAR_LEDS );
     
     for ( int i=0; i < 2; i++ )
     {
@@ -906,7 +908,7 @@ void testGearLEDs()
 /// ------------------------------------------------------------
 void testEachGearLED()
 {
-    Serial.println( ">> Test each Gear LED" );
+    Serial.println( MSG_TEST_EACH_GEAR_LED );
         
     for ( int i=0; i < 1; i++ )
     {
@@ -928,7 +930,7 @@ void testEachGearLED()
 /// --------------------------------------------------------------------------
 bool initializeLCD()
 {   
-    Serial.println( ">> LCD Initializing.." );
+    Serial.println( MSG_LCD_INIT_BEGIN );
     // Initialize the display, clears the display
     if ( !lcd.init() )
     {
@@ -939,7 +941,7 @@ bool initializeLCD()
     lcd.setBacklight( lcdBackLight );
     lcd.setContrast( lcdContrast );
 
-    Serial.println( ">> LCD Initialized" );
+    Serial.println( MSG_LCD_INIT_END );
     lcdInitialized = true;
     
     return true;
@@ -950,7 +952,7 @@ bool initializeLCD()
 /// --------------------------------------------------------------------------
 bool initializeDS1631()
 {
-  Serial.println( ">> DS1631 Initializing.." );
+  Serial.println( MSG_DS1631_INIT_BEGIN );
   
    // Stop conversion to be able to modify "Access Config" Register
   Wire.beginTransmission( DS1631_I2C_ADDRESS );
@@ -993,7 +995,7 @@ bool initializeDS1631()
       return false; // Error
   }
   
-  Serial.println( ">> DS1631 Initialized" );
+  Serial.println( MSG_DS1631_INIT_END );
   
   return true; // Success
 }
@@ -1005,7 +1007,7 @@ void showWelcome()
 {
     #ifdef SHOW_WELCOME    
     
-    testGearLEDs();
+    showAllGearLEDs();
 
     String line2 = String(Welcome1_Line2);
     line2 += VERSION;
@@ -1019,7 +1021,7 @@ void showWelcome()
 /// ----------------------------------------------------------------------------------------------------
 void printWelcomeScreen( String line1, String line2, int showDelay, int scrollDelay, char scrollDirection )
 {
-    Serial.println( ">> Show Welcome - BEGIN.." );     
+    Serial.println( MSG_WELCOME_BEGIN );     
 
     lcd.clear();
     
@@ -1028,7 +1030,7 @@ void printWelcomeScreen( String line1, String line2, int showDelay, int scrollDe
     lcd.print( line1 );       
     // Print line 2
     lcd.setCursor( 1,0 );
-    lcd.print(line2 );       
+    lcd.print(line2 );
 
     delay( showDelay );
 
@@ -1044,7 +1046,7 @@ void printWelcomeScreen( String line1, String line2, int showDelay, int scrollDe
     
     lcd.clear();
     
-    Serial.println( ">> Show Welcome - END" );
+    Serial.println( MSG_WELCOME_END );
 }
 
 String serialCommandLine = "";
@@ -1122,11 +1124,11 @@ void processSerialInput()
 /// ----------------------------------------------------------------------------------------------------
 void handleCommand( String cmd, String arg1, String arg2 )
 {
-        if ( cmd == "ALIVE" )
+        if ( cmd == CMD_ALIVE )
         {
-            Serial.println( "Yes, I'm here" );
+            Serial.println( MSG_ISALIVE );
         }
-        else if ( cmd == "STAT" )
+        else if ( cmd == CMD_STAT )
         {
             Serial.print( "Temp. = " );
             Serial.print( temperature );
@@ -1149,22 +1151,22 @@ void handleCommand( String cmd, String arg1, String arg2 )
             // Important Note: for some unknown reason, the serial printing cannot be too large. It seems that the Serial buffer size is limited. Flush() doesn't do what its supposed to do.
             //       Keep it short, or maybe add some delay to let the stream clear itself.
         }
-        else if ( cmd == "CONFIG" )
+        else if ( cmd == CMD_CONFIG )
         {
            printConfiguration(); 
         }
        
-        else if ( cmd == "TEST" )
+        else if ( cmd == CMD_TEST )
         {
            showWelcome(); 
            // Force immediate refresh
            forceLCDRefresh( true );
         }
-        else if ( cmd == "TESTLEDS" )
+        else if ( cmd == CMD_TESTLEDS )
         {
             testEachGearLED();
         }
-        else if ( cmd == "SETCFG" )
+        else if ( cmd == CMD_SETCFG )
         {
             if ( arg1.length() == 0 )
                 Serial.println( "Syntax error: arg1" );
@@ -1172,7 +1174,7 @@ void handleCommand( String cmd, String arg1, String arg2 )
                 Serial.println( "Syntax error: arg2" );
             else            
             {
-                if ( arg1 == "TEMP" )
+                if ( arg1 == CMD_ARG_TEMP )
                 {
                      char tempMode = arg2[0];
                      if ( configuration.temperatureMode != tempMode )
@@ -1205,8 +1207,8 @@ void handleCommand( String cmd, String arg1, String arg2 )
         }
         else
         {
-            Serial.println( "SYNTAX: CMD [ARG1] [ARG2];" );
-            Serial.println( "   CMD = {ALIVE | TEST | STAT | SETCFG}" );
+            Serial.println( MSG_SYNTAX_1 );
+            Serial.println( MSG_SYNTAX_2 );
         }
 }
 

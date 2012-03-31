@@ -61,8 +61,6 @@ float RunningAverage::getAverage()
 
 void RunningAverage::trimToValue(float value)
 {
-	_cnt = 1;
-	_idx = 0;
-	_sum = value;
-	_ar[0] = value;
+	clear();
+	addValue(value);
 }

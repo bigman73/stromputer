@@ -1,6 +1,6 @@
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 // []
-// []   V-Strom Mk1B - An extra display for a Suzuki DL-650 ("V-Strom") that adds the following functionality:
+// []   Stromputer - An enhanced display for a Suzuki DL-650 ("V-Strom") that adds the following functions:
 // []	  1. Battery Level display in Volts - e.g. 14.5V
 // []	  2. Gear Position Indicator on LCD - e.g. 1, 2, 3, 4, 5, 6, N
 // []	  3. Ambient Temperature in Farenheight or Celsius - e.g. 62.5F
@@ -65,12 +65,13 @@
 // []     0.28 -   1/23/2012 + Fixed transient/fake Neutral
 // []     0.30 -   2/1/2012  + 
 // []     0.31 -   3/10/2012 + Fixed gear voltage ranges (measured on bike)
+// []     0.40 -   3/29/2012 + Fixed ADC measuring error (battery and on-board temperature). VCC is not 5.0V and can change. Internal volt reference (1.1V) is used as a reference
+// []                        + Using RunningAverage library for smoothing reading of input (Battery, Gear, Temperature)
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
 #include <Wire.h>
-#include <inttypes.h>
 
 // -----------------    Library Includes    ------------------------
 // Include 3rd Party library - LCD I2C NHD
@@ -94,6 +95,13 @@
 // EEProm Anything: http://arduino.cc/playground/Code/EEPROMWriteAnything
 #include "EEPROMAnything.h"
 
+// 1-Wire Support (Dallas Semiconductor Serial Communication Protocol)
+// http://www.pjrc.com/teensy/td_libs_OneWire.html
+#include <OneWire.h>
+
+#include <RunningAverage.h>
+
+// TODO: Replace resistors in voltage dividers with accurate, low PPM/C resistors
 
 // -----------------------------------------------------------------
 
@@ -147,12 +155,6 @@ void setup()
         Serial.println( ERR_DS1631_INIT_FAILED );
     }
     	
-    // sets the digital pin of gear tacktile button as input
-    #ifdef MANUAL_GEAR_EMULATION
-    pinMode( MANUAL_GEAR_DOWN_PIN, INPUT );
-    pinMode( MANUAL_GEAR_UP_PIN, INPUT );
-    #endif
-    
     // set Timer1
     Timer1.initialize( TIMER1_RESOLUTION );
     Timer1.attachInterrupt( timerISR ); // attach the service routine here
@@ -178,7 +180,7 @@ void loop()
 /// Timed Action Event handler for Sampling & LCD Display Loop 
 /// --------------------------------------------------------------------------
 void lcdDisplayLoop()
-{
+{   
     // Timed Actions ("Events")
     checkForceLCDRefreshTimedAction.check();
     battLevelTimedAction.check();       
@@ -216,8 +218,8 @@ void timerISR()
     // Handle gear LED display at 20Hz (i.e. check every 50 msec)
     if ( timerDivider % 50 == 1 ) 
     {
-        // Handle gear position read
-        handleGearPositionRead();
+        // Read the gear position analog value 
+        readGearPositionAnalog();          
 
         // Update Gear Position LEDs (note: updateGearLEDs() is optimized to only actually refresh on gear change)
         updateGearLEDs();
@@ -264,74 +266,26 @@ void forceLCDRefresh( bool forceNow )
     }
 }
 
-
-/// --------------------------------------------------------------------------
-/// Handle reading the gear position, using one of the modes:
-///   Emulation - Use breadboard tactile buttons
-///   Analog    - Use analog-to-digital read from Motorcycles's Gear Position Sensor voltage
-/// --------------------------------------------------------------------------
-void handleGearPositionRead()
-{
-    #ifdef MANUAL_GEAR_EMULATION
-        // read the input pin for Gear Up button
-        int manualButtonValue = digitalRead(MANUAL_GEAR_UP_PIN);
-        if ( manualButtonValue == BUTTON_DOWN )
-        {
-            if ( gearButtonTriggered )
-            {
-                gear++;
-                gearButtonTriggered = false;
-            
-                if ( gear > 6 )
-                    gear = GEAR_NEUTRAL;
-            }
-        }
-        else
-        {
-            // read the input pin for Gear Down button
-            manualButtonValue = digitalRead(MANUAL_GEAR_DOWN_PIN);
-            if ( manualButtonValue == BUTTON_DOWN )
-            {
-                if ( gearButtonTriggered )
-                {
-                    gear--;
-                    gearButtonTriggered = false;
-            
-                    if ( gear < 0)
-                        gear = 6;
-                }
-            }
-            // Both buttons are UP, therefore are considered triggered
-            else
-            {
-                gearButtonTriggered = true;
-            }
-        }
-    #else    
-        readGearPositionAnalog();          
-    #endif
-}
-
 /// --------------------------------------------------------------------------
 /// Timed Action Event handler for battLevelTimedAction - 
 ///     Processes the battery level
 /// --------------------------------------------------------------------------
 void processBatteryLevel()
 {   
+    float vcc = readVcc();
+
+    vccRunningAvg.addValue( vcc );
+    
     readBatteryLevelAnalog();
     
     // When 'live' on the motorcycle, there is a 0.9V difference between what Arduino samples and what a volt meter samples.
     // TODO: Figure out the difference, probably due to a diode somewhere
     // As a temporary workaround, 0.9V are added as a constant
     if ( battLevel > 1.5f )
-        battLevel += 0.9f;
+        battLevel += 0.8f;
     
     printBatteryLevel();
 }
-
-
-float battLevel0 = 0; // last value
-float battLevel1 = 0; // value before last value (1st oldest value)
 
 /// ----------------------------------------------------------------------------------------------------
 /// Reads the current battery level from the voltage divider circuit (4:1, 20V -> 5V), using Arduino ADC
@@ -340,24 +294,25 @@ void readBatteryLevelAnalog()
 {
     battReadError = true; // Assume read had errors, by default
 
-    int value = analogRead( ANALOGPIN_BATT_LEVEL );    // read the input pin for Battery Level
+    int adcValue = analogRead( ANALOGPIN_BATT_LEVEL );    // read the input pin for Battery Level
     
-    // Keep a moving time window of 3 readings
-    float battLevel2 = battLevel1; // 2nd oldest value
-    battLevel1 = battLevel0;
+    float avgVcc = vccRunningAvg.getAverage();
+    float currentBattLevel = BATT_VOLT_DIVIDER * avgVcc * ( adcValue / 1024.0f );
+    currentBattLevel = constrain( currentBattLevel, 0.01f, 20.0f );
 
-    battLevel0 = BATT_VOLT_DIVIDER * ARDUINO_VIN_VOLTS * ( value / 1024.0f );
-    
-    if ( battLevel1 == 0 || battLevel2 == 0 )
+    // Trim the battery level average when the switch is turned on for the first time
+    if ( currentBattLevel > 8.f && battLevel < 2.0f )   
     {
-        // Disable moving window, for initial readings until they stabilize    
-        battLevel = battLevel0; 
+        battRunAvg.trimToValue( currentBattLevel );
     }
+    // Regular operation
     else
     {
-        // Calculate average voltage, using moving time window
-        battLevel = ( battLevel0 + battLevel1 + battLevel2 ) / 3.0f;
+        // Update the moving average window
+        battRunAvg.addValue( currentBattLevel );    
     }
+
+    battLevel = battRunAvg.getAverage();
         
     battReadError = false; // Clear read error - we made it here
     
@@ -384,9 +339,11 @@ void printBatteryLevel()
     // Keep the current battery level, to optimize display time
     lastBattLevel = battLevel;
 
+    #ifndef DEBUG_PRINT_GEARVOLTS
     // Print Battery Label
     lcd.setCursor( 0, 0 );
-    lcd.print( BATTERY_LABEL );     
+    lcd.print( BATTERY_LABEL );  
+    #endif   
 
     // Print Battery Value
     String battLevelValue = "X";
@@ -399,20 +356,9 @@ void printBatteryLevel()
     {
         // Format battery float value
         char formattedBattLevel[5]; // DD.D + NULL => Maximum 5 characters
-        formatFloat( formattedBattLevel, battLevel, 1 );
-        String battFormattedString = formattedBattLevel;
+        dtostrf(battLevel, 4, 1, formattedBattLevel );
+        battLevelValue = formattedBattLevel;
 
-        // Pad to right
-        if ( battLevel >= 0 && battLevel < 10 )
-        {
-           battLevelValue = " ";
-           battLevelValue += battFormattedString;
-        }
-        else
-        {
-           battLevelValue = battFormattedString;
-        };
-    
         // Add volts unit
         battLevelValue += "V";
     }
@@ -482,11 +428,32 @@ void readGearPositionAnalog()
    
     int value = analogRead( ANALOGPIN_GEAR_POSITION );
         
-    gearPositionVolts = GEAR_VOLT_DIVIDER * GEAR_POSITION_VOLTS * ( value / 1024.0f );    // read the input pin for Gear Position
+    float avgVcc = vccRunningAvg.getAverage();
+    float currentGearPositionVolts = GEAR_VOLT_DIVIDER * avgVcc * ( value / 1024.0f );    // read the input pin for Gear Position
+    // Constrain the input reading, to reduce errors
+    currentGearPositionVolts = constrain( currentGearPositionVolts, 0.01f, 5.0f );
+
+    if ( abs( currentGearPositionVolts - gearLevelRunAvg.getAverage() ) > 0.5f ) // big change, probably a real gear shift
+    {
+        gearLevelRunAvg.trimToValue( currentGearPositionVolts );
+    }
+    else // small change
+    {    
+        // Recalc average volts
+        gearLevelRunAvg.addValue( currentGearPositionVolts );
+    }
+
+    // Use the average gear volts
+    gearPositionVolts = gearLevelRunAvg.getAverage();
+    
     determineCurrentGear();
     
     gearReadError = false; // Clear read error - we made it here
 }
+
+// Reference voltage - used to fixed the gear position voltage differences created in the V-Strom due to temperature changes inside the transmission
+//   e.g. When the motorcycle is cold 1st gear is 1.00V, but when it is hot 1st gear is 1.33V. Also N is 4.6V cold and 4.95V hot.
+float vref = 0;
 
 // ----------------------------------------------------------------------------------------------------
 /// Determins the current gear from the gear position volts
@@ -495,24 +462,27 @@ void determineCurrentGear()
 {
      short lastTransientGear = transientGear;
 
-     if ( IsBetween( gearPositionVolts, GEAR1_FROM_VOLTS, GEAR1_TO_VOLTS ) )
+     // Calculate fixed gear position volts - take vref into consideration
+     float fixedGearPositionVolts = gearPositionVolts + vref;
+     
+     if ( IsBetween( fixedGearPositionVolts,  GEAR1_FROM_VOLTS, GEAR1_TO_VOLTS ) )
          transientGear = 1;
-     else if ( IsBetween( gearPositionVolts, GEAR2_FROM_VOLTS, GEAR2_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts, GEAR2_FROM_VOLTS, GEAR2_TO_VOLTS) )
          transientGear = 2;
-     else if ( IsBetween( gearPositionVolts, GEAR3_FROM_VOLTS, GEAR3_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts , GEAR3_FROM_VOLTS, GEAR3_TO_VOLTS ) )
          transientGear = 3;
-     else if ( IsBetween( gearPositionVolts, GEAR4_FROM_VOLTS, GEAR4_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts, GEAR4_FROM_VOLTS, GEAR4_TO_VOLTS ) )
          transientGear = 4;
-     else if ( IsBetween( gearPositionVolts, GEAR5_FROM_VOLTS, GEAR5_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts, GEAR5_FROM_VOLTS, GEAR5_TO_VOLTS ) )
          transientGear = 5;
-     else if ( IsBetween( gearPositionVolts, GEAR6_FROM_VOLTS, GEAR6_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts, GEAR6_FROM_VOLTS, GEAR6_TO_VOLTS ) )
          transientGear = 6;
-     else if ( IsBetween( gearPositionVolts, GEARN_FROM_VOLTS, GEARN_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts, GEARN_FROM_VOLTS, GEARN_TO_VOLTS ) )
          transientGear = GEAR_NEUTRAL;
      else
          transientGear = GEAR_ERROR; // Default: Error
          
-     // If transient gear has changed, do not allow it to stablize
+     // If transient gear has changed, do not allow it to stabilize
      if ( lastTransientGear != transientGear )
      {
          // Reset the transient start counter
@@ -527,6 +497,15 @@ void determineCurrentGear()
          {
              // Make transient gear change a stable gear change
              gear = transientGear;
+             // DISABLED TEMPORARLY to check if vcc read fixed issues
+             /*
+             if ( gear == 1 && battLevel > 9 and gearPositionVolts > 0.9f )
+             {
+                 // Recalc vref based on 1st gear readings
+                 // vref = GEAR1_DEFAULT - gearPositionVolts;
+             }
+             */
+             
              transientGear = GEAR_ERROR;
          }
      }
@@ -539,8 +518,21 @@ void printGearPosition()
 {    
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     #ifdef DEBUG_PRINT_GEARVOLTS
+
+    char buffer[6];
+
     lcd.setCursor( 0, 6 );
-    lcd.print( gearPositionVolts );
+    dtostrf(gearPositionVolts, 4, 2, buffer );
+    lcd.print( buffer );
+    
+    lcd.setCursor( 0, 0 );
+    dtostrf(vccRunningAvg.getAverage(), 4, 2, buffer );
+    lcd.print( buffer );
+    lcd.print( "V" );
+
+/*    lcd.setCursor( 0, 11 );
+    dtostrf(vref, 4, 2, buffer ); 
+    lcd.print( buffer );*/
     #endif
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -711,14 +703,20 @@ void readTemperature()
     temperatureReadError = false; // Clear read error - we made it here
 }
 
+/// ----------------------------------------
+/// Converts celsius to fahrenheight
+/// ----------------------------------------
 float toFahrenheight( float celsius )
 {
-      return temperature * 9.0 / 5.0 + 32;
+      return temperature * 1.8 + 32;
 }
 
+/// ----------------------------------------
+/// Converts fahrenheight to celsius 
+/// ----------------------------------------
 float toCelsius( float fahrenheight )
 {
-      return ( temperature - 32 ) * 5.0 / 9.0;
+      return ( temperature - 32 ) * 1.8;
 }
 
 
@@ -760,18 +758,11 @@ void printTemperature()
         temperatureValue = " ----";
     }
     else
-    {   
-        // Pad one space, align to right if temperature is two digits (left of dot)
-        if ( ( temperature > 10 && temperature < 100 ) || ( temperature < 0 && temperature > -10 ) )
-            temperatureValue += " " ;
-        // Pad two spaces, align to right if temperature is one digit (left of dot)        
-        else if ( temperature > 0 && temperature < 10 )
-            temperatureValue += "  " ;
-    
+    {      
         // format temperature into a fixed .1 format (e.g. 62.5 or 114.4 [too hot to ride! :) ] or -10.7 [too cold to ride! :) ])
-        char formattedTemperature[7]; // DDD.DD + NULL => Maximum 7 characters
-        formatFloat( formattedTemperature, temperature, 1 );
-        temperatureValue += formattedTemperature;
+        char formattedTemperature[7]; // [-]DDD.D + NULL => Maximum 7 characters (NULL included)
+        dtostrf(temperature, 6, 1, formattedTemperature );
+        temperatureValue = formattedTemperature;
         
         // Add temperature mode unit
         if ( configuration.temperatureMode == 'F' )
@@ -784,96 +775,9 @@ void printTemperature()
         }
     }
     
-    lcd.setCursor( 1, 10 );
+    lcd.setCursor( 1, 9 );
     lcd.print( temperatureValue );
 }
-
-
-/// ----------------------------------------------------------------------------------------------------
-/// Formats a float to a string. A workaround to sprintf not working on arduino (produces "?")
-/// Based on source: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1164927646
-/// ----------------------------------------------------------------------------------------------------
-char *formatFloat( char *buffer, double floatValue, int precision )
-{
-  static long precisionLongs[] = {0,10,100,1000,10000};
-  
-  // Keep the start of the output buffer
-  char *result = buffer;
-  
-  // write the integer part
-  long intPart = (long) floatValue;
-  itoa(intPart, buffer, 10);
-  while (*buffer != '\0') buffer++;
-
-  // Append dot
-  *buffer++ = '.';
-
-  // Append the fractional part with the requesed preceision
-  long decimals = abs((long)( (floatValue - intPart) * precisionLongs[ precision ] ));
-  itoa(decimals, buffer, 10);
-  
-  // Return the result buffer (pointer)
-  return result;
-}
- 
- 
-#ifdef PCF8591_DAC_GEAR_EMULATOR
- 
-/// ------------------------------------------------------------
-/// Controls the PCF8591 IC through I2C protocol
-/// Arguments:
-///    dac_value - A byte value (0..255) that would be converted to analog voltage level (VSS..VREF, typically 0..5V)
-///    adc_values - An output array of bytes where the results of ADC conversion will be stored, per channel
-///    adcChannelMask - A mask for the ADC Input channel mask
-/// ------------------------------------------------------------
-int controlPCF8591_I2C(byte dac_value, byte adc_values[], byte adcChannelMask )
-{
-    int dacValueSent = 0;
-    
-    // Serial.print( "inputChannelMask= " );     Serial.println( (int) inputChannelMask );
-    // Iterate on all input channels, and get their ADC Value if the input mask includes them
-    for ( int inputChannel = 0; inputChannel <=3; inputChannel++ )
-    {
-            if ( ( adcChannelMask & ( 1 << inputChannel ) ) != 0 )
-            {
-                  Wire.beginTransmission(PCF8591_I2C_ADDRESS);
-                  // Select ADC channel (One of CH0..CH3)
-                  Wire.write( PCF8591_DAC_SINGLECHANNEL_MODE | (byte) inputChannel );
-                      
-                  // Only send the dac value once (AOUT)
-                  if ( dacValueSent == 0 )
-                  {
-                      Wire.write(dac_value);
-                      dacValueSent = 1;
-                  }
-                  Wire.endTransmission();
-                  
-                  delay(1);
-                  
-                  Wire.requestFrom( (int) PCF8591_I2C_ADDRESS, 2 );
-                  if (Wire.available()) 
-                  {
-                    Wire.read();  // last value -> just read but ignore
-                  }
-                  else
-                      return 0;
-                  
-                  if (Wire.available())
-                  {
-                    adc_values[inputChannel] = Wire.read();
-                  }
-                  else
-                      return 0;
-                  
-
-                  delay(1);
-            }
-    } // for
-    
-    return 1;
-}    
-#endif
-
 /// ------------------------------------------------------------
 /// Show all gear LEDs
 /// ------------------------------------------------------------
@@ -1134,6 +1038,9 @@ void handleCommand( String cmd, String arg1, String arg2 )
             Serial.print( temperature );
             Serial.println( configuration.temperatureMode  );
 
+            Serial.print( "VCC = " );
+            Serial.println( vccRunningAvg.getAverage(), DEC );
+
             Serial.print( "Gear = " );
             if ( gear == 0 )
                 Serial.println( "N" );
@@ -1252,5 +1159,30 @@ void printConfiguration()
     Serial.print( "IsValidConfig (Raw Value): " ); Serial.println( configuration.isValidConfig );
     Serial.print( "IsValidConfig: " ); Serial.println( ( configuration.isValidConfig == 12345 ) ? "Y" : "N" );
     Serial.print( "temperatureMode Mode: " ); Serial.println( configuration.temperatureMode );
+}
+
+/// ----------------------------------------------------------------------------------------------------
+/// Read the internal VCC. Needed for accurate ADV calculations, 5V cannot be assumed.
+// Based on: http://code.google.com/p/tinkerit/wiki/SecretVoltmeter
+// http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1263440087
+/// ----------------------------------------------------------------------------------------------------
+float readVcc() 
+{
+    long vccValue;
+    // Read 1.1V reference against AVcc
+    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+    delay(2); // Wait for Vref to settle
+    ADCSRA |= _BV(ADSC); // Convert
+    while (bit_is_set(ADCSRA,ADSC));
+    vccValue = ADCL;
+    vccValue |= ADCH<<8;
+    vccValue = 1126400L / vccValue; // Back-calculate AVcc in mV
+  
+    // Convert mV integer to V (float)
+    float result = vccValue / 1000.0f;
+    // Constrain VCC between 0 .. 5.5
+    result = constrain( result, 0.01f, 5.5f );
+    
+    return result;
 }
 

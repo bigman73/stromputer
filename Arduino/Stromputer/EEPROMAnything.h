@@ -9,14 +9,7 @@
 
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 // []
-// []   V-Strom Mk1B - An extra display for a Suzuki DL-650 ("V-Strom") that adds the following functionality:
-// []	  1. Battery Level display in Volts - e.g. 14.5V
-// []	  2. Gear Position Indicator on LCD - e.g. 1, 2, 3, 4, 5, 6, N
-// []	  3. Ambient Temperature in Farenheight or Celsius - e.g. 62.5F
-// []	  4. [Future] LED display of gear position (one led for each gear 1-6, in different colors, N will be blinking on 1)
-// []	  5. [Future] Accurate display of the fuel level (in percentage)
-// []     6. [Future] Show Fuel consumption - MPG or KM/L, TBD: need to tap into motorcycle's speed sensor (PWM)
-// []	  7. [Future] Fix the OEM V-Strom Fuel Gauge to become linear
+// []   Stromputer
 // []     License: GPL V3
 /*
     Stromputer - Enhanced display for Suzuki V-Strom Motorcycles (DL-650, DL-1000, years 2004-2011)
@@ -67,3 +60,4 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 }
 
 #endif
+

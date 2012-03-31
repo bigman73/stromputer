@@ -4,14 +4,7 @@
 
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 // []
-// []   V-Strom Mk1B - An extra display for a Suzuki DL-650 ("V-Strom") that adds the following functionality:
-// []	  1. Battery Level display in Volts - e.g. 14.5V
-// []	  2. Gear Position Indicator on LCD - e.g. 1, 2, 3, 4, 5, 6, N
-// []	  3. Ambient Temperature in Farenheight or Celsius - e.g. 62.5F
-// []	  4. [Future] LED display of gear position (one led for each gear 1-6, in different colors, N will be blinking on 1)
-// []	  5. [Future] Accurate display of the fuel level (in percentage)
-// []     6. [Future] Show Fuel consumption - MPG or KM/L, TBD: need to tap into motorcycle's speed sensor (PWM)
-// []	  7. [Future] Fix the OEM V-Strom Fuel Gauge to become linear
+// []   Stromputer - An Enhanced display for a Suzuki DL-650 ("V-Strom")
 // []     License: GPL V3
 /*
     Stromputer - Enhanced display for Suzuki V-Strom Motorcycles (DL-650, DL-1000, years 2004-2011)
@@ -40,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.31"
+#define VERSION "0.40"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
@@ -48,12 +41,6 @@
 
 // Comment in/out to enable/disable printing the gear volts
 #define DEBUG_PRINT_GEARVOLTS
-
-// Comment in/out to enable/disable PCF8591 DAC Gear Emulation (Automatic increment from 0..5V in loops)
-//#define PCF8591_DAC_GEAR_EMULATOR
-
-// Comment in/out to enable/disable manual gear emulation (using two tactile buttons)
-// #define MANUAL_GEAR_EMULATION
 
 // Temperature mode - F or C
 #define DEFAULT_TEMPERATURE_MODE 'F'
@@ -103,28 +90,33 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 // ^^^^^^^^^^^   Gear mapping voltage values ^^^^^^^^^^^
 // Note: DL-650 gear shows 0V on 1st gear, when bike engine is off, but switch is on. Only when engaged to N for first time, then the 1st gear reading becomes 1.33.
 
+#define GEAR1_DEFAULT    1.33f
+
 #define GEAR1_FROM_VOLTS 0.00f
-#define GEAR1_TO_VOLTS   1.05f
-#define GEAR2_FROM_VOLTS 1.15f
-#define GEAR2_TO_VOLTS   1.60f
-#define GEAR3_FROM_VOLTS 1.80f
-#define GEAR3_TO_VOLTS   2.40f
-#define GEAR4_FROM_VOLTS 2.60f
-#define GEAR4_TO_VOLTS   3.00f
-#define GEAR5_FROM_VOLTS 3.30f
-#define GEAR5_TO_VOLTS   3.90f
-#define GEAR6_FROM_VOLTS 4.00f
-#define GEAR6_TO_VOLTS   4.40f
-#define GEARN_FROM_VOLTS 4.50f
+#define GEAR1_TO_VOLTS   1.55f
+#define GEAR2_FROM_VOLTS 1.55f
+#define GEAR2_TO_VOLTS   2.20f
+#define GEAR3_FROM_VOLTS 2.20f
+#define GEAR3_TO_VOLTS   2.90f
+#define GEAR4_FROM_VOLTS 2.90f
+#define GEAR4_TO_VOLTS   3.65f
+#define GEAR5_FROM_VOLTS 3.65f
+#define GEAR5_TO_VOLTS   4.30f
+#define GEAR6_FROM_VOLTS 4.30f
+#define GEAR6_TO_VOLTS   4.75f
+#define GEARN_FROM_VOLTS 4.75f
 #define GEARN_TO_VOLTS   5.50f
+
+
+// Gear Voltage Level Measurements
+//  DATE        ARDUINO_TEMP  ADJ_FACTOR   F/W    1       N      2             3       4      5      6
+//  3/18/2012    82.5F        N/A          0.32   1.35    4.9    ?1.90-2.00?   2.50    3.04   4.05   4.5
+//  3/18/2012    71.8F        N/A          0.32   1.35    4.95   1.7           2.50    3.20   4.05   4.45
 
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 #define GEAR_NEUTRAL 0
 #define GEAR_ERROR -1
-
-#define MANUAL_GEAR_DOWN_PIN 12
-#define MANUAL_GEAR_UP_PIN 8
 
 // Buttons are pulled up, so pressed is zero voltage or logical zero, released is VCC or logical on
 #define BUTTON_DOWN 0
@@ -215,10 +207,6 @@ float gearVolts[] = { 5, 4.5, 4.8, 4.3 };
 byte gearReadError = 0;
 float gearPositionVolts = 0;
 
-#ifdef MANUAL_GEAR_EMULATION
-bool gearButtonTriggered = true; // Used to ensure that a tactile button has to be released up, before the system handles the next button down event ("Click")
-#endif
-
 float battLevel;             // Volts
 float lastBattLevel = -0.1;  // Force initial update
 byte battReadError = 0;
@@ -233,7 +221,7 @@ bool isForceRefreshGear = true;
 bool isForceRefreshTemp = true;
 
 // Intervals for Timed Actions - in msec
-#define PROCESS_BATT_LEVEL_TIMED_INTERVAL 2000
+#define PROCESS_BATT_LEVEL_TIMED_INTERVAL 1000
 #define PROCESS_TEMP_TIMED_INTERVAL 2000
 #define PROCESS_PHOTO_CELL_TIMED_INTERVAL 3000
 #define LCD_DISPLAY_LOOP_TIMED_INTERVAL 250
@@ -243,17 +231,28 @@ bool isForceRefreshTemp = true;
  // 1000 microseconds = 1 msec = 1000hz
 #define TIMER1_RESOLUTION 1000
 
-#define ARDUINO_VIN_VOLTS 4.9f
 // RB1: 39Kohm, Real measured value: 38.2KOhm
 // RB2: 120Kohm, Real measured value: 118.5KOhm
 #define BATT_VOLT_DIVIDER ( 118500.0f + 38200.0f ) / 38200.0f
-#define GEAR_POSITION_VOLTS 5.0f
 // RG1: 33Kohm, Real measured value: 32.4KOhm
 // RG2: 33Kohm, Real measured value: 32.4KOhm
 #define GEAR_VOLT_DIVIDER ( 32400.0f + 32400.0f ) / 32400.0f
 
+#define BATT_WINDOW_SIZE 4
+
+#define VCC_WINDOW_SIZE 16
+
+#define GEAR_WINDOW_SIZE 16    
+
+RunningAverage battRunAvg(BATT_WINDOW_SIZE); 
+// VCC - Operating Voltage of Arduino
+RunningAverage vccRunningAvg(VCC_WINDOW_SIZE);
+
+RunningAverage gearLevelRunAvg(GEAR_WINDOW_SIZE); 
+
+
 // msec
-#define MIN_TRANSIENTGEAR_INTERVAL 100
+#define MIN_TRANSIENTGEAR_INTERVAL 200
 
 #define TEMPERATURE_ERROR_DIFF 30
 #define TEMPERATURE_MIN_VALID -55    
@@ -276,11 +275,11 @@ bool isForceRefreshTemp = true;
 #define DIRECTION_RIGHT 'R'
 
 // UI Labels
-#define GEAR_LABEL "Gear " 
-#define TEMPERATURE_LABEL "Temp  "
-#define BATTERY_LABEL "Batt  "
-#define Welcome1_Line1 "Stromputer-DL650"
-#define Welcome1_Line2 "F/W Ver="
+#define GEAR_LABEL         "Gear " 
+#define TEMPERATURE_LABEL  "Temp  "
+#define BATTERY_LABEL      "Batt  "
+#define Welcome1_Line1     "Stromputer-DL650"
+#define Welcome1_Line2     "F/W Ver="
 
 #define CMD_ALIVE      "ALIVE"
 #define CMD_STAT       "STAT"
@@ -307,6 +306,5 @@ bool isForceRefreshTemp = true;
 
 #define ERR_LCD_INIT_FAILED      ">> ERROR: LCD failed to initialize"
 #define ERR_DS1631_INIT_FAILED   ">> ERROR: DS1631 failed to initialize" 
-
 
 #endif

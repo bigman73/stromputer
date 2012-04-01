@@ -111,9 +111,9 @@ SHIELD SCREW IN PORTS:
 ----------------------
 LEFT SIDE:
 ----------
-5V  - LCD +, Grey sheith green
+5V  - LCD +, Grey sheath green
 GND - Battery GND
-GND - LCD GND, Grey sheith blue/black
+GND - LCD GND, Grey sheath blue/black
 VIN 
 RST
 3V3
@@ -125,8 +125,8 @@ A0
 A1
 A2
 A3
-A4 - SDA (I2C DATA),  Grey sheith white/blue
-A5 - SCK (I2C CLOCK), Grey sheith white/green
+A4 - SDA (I2C DATA),  Grey sheath white/blue
+A5 - SCK (I2C CLOCK), Grey sheath white/green
 GND
 GND
 
@@ -136,17 +136,17 @@ AREF
 GND
 D13
 D12
-D11 - GEAR LED6/Blue sheith blue
-D10 - GEAR LED5/Blue sheith white/blue
-D9  - GEAR LED4/Blue sheith white/orange
+D11 - GEAR LED6/Blue sheath blue
+D10 - GEAR LED5/Blue sheath white/blue
+D9  - GEAR LED4/Blue sheath white/orange
 D8  
 D7
-D6  - GEAR LED3/Blue sheith orange
-D5  - GEAR LED2/Blue sheith white/green
+D6  - GEAR LED3/Blue sheath orange
+D5  - GEAR LED2/Blue sheath white/green
 D4   
-D3  - GEAR LED1/Blue sheith green
+D3  - GEAR LED1/Blue sheath green
 D2
 TX
 RX
-GND - Blue sheith white/brown
-GND - Blue sheith brown
+GND - Blue sheath white/brown
+GND - Blue sheath brown

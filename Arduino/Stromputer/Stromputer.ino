@@ -98,6 +98,9 @@
 // 1-Wire Support (Dallas Semiconductor Serial Communication Protocol)
 // http://www.pjrc.com/teensy/td_libs_OneWire.html
 #include <OneWire.h>
+// Dallas Temperature (i.e. DS18B20) support
+// https://code.google.com/p/dallas-temperature-control-library/
+#include <DallasTemperature.h>
 
 #include <RunningAverage.h>
 
@@ -130,6 +133,10 @@ TimedAction lcdDisplayTimedAction = TimedAction( 0, LCD_DISPLAY_LOOP_TIMED_INTER
 // Timed action for Serial Input
 TimedAction serialInputTimedAction = TimedAction( 0, SERIALINPUT_TIMED_INTERVAL, processSerialInput );
 
+#define DS18B20_PIN 4
+OneWire oneWire( DS18B20_PIN );
+DallasTemperature DS18B20Sensor( &oneWire ); 
+
 /// --------------------------------------------------------------------------
 /// Arduino one-time setup routine - i.e. Program entry point like main()
 /// --------------------------------------------------------------------------
@@ -140,6 +147,9 @@ void setup()
     Serial.print( MSG_FIRMWARE ); Serial.println( VERSION );
 
     onBoardLed.on();    
+    
+    // Start Temperature interface
+    DS18B20Sensor.begin();                   
     
     setupConfiguration();
 
@@ -644,20 +654,22 @@ void updateGearLEDs()
 /// --------------------------------------------------------------------------
 void processTemperature()
 {
-    readTemperature();
-   
+    readTemperatureDS18B20();
+
+    readTemperatureDS1631();
+       
     // Workaround to a problem with DS1631: From time to time, the IC goes nuts and starts returning odd readings (TODO: Check if related to pull up resistor values, or breadboard, or the generic IC socket
     // Check if DS1631 is returning bad temperature vlaues (but not on boot last temperature is set to -99), if yes, re-establish communication with it
-    if ( !temperatureReadError && lastTemperature > TEMPERATURE_MIN_VALID && abs( lastTemperature - temperature ) > TEMPERATURE_ERROR_DIFF )
+    if ( !temperatureReadError && lastOnBoardTemperature > TEMPERATURE_MIN_VALID && abs( lastOnBoardTemperature - onBoardTemperature ) > TEMPERATURE_ERROR_DIFF )
     {
         // Re-Initialize DS1631 - Stop temperature conversion, and start it again
         initializeDS1631();
         
         // Now read temperature again
-        readTemperature();
+        readTemperatureDS1631();
         
         // If still there are odd readings then declare temperature error mode
-        if ( abs( lastTemperature - temperature ) > TEMPERATURE_ERROR_DIFF )
+        if ( abs( lastOnBoardTemperature - onBoardTemperature ) > TEMPERATURE_ERROR_DIFF )
         {
             temperatureReadError = true;
         }
@@ -667,9 +679,26 @@ void processTemperature()
 }
 
 /// ----------------------------------------------------------------------------------------------------
+// Read the current temperature from OneWire DS18B20 Thermometer
+/// ----------------------------------------------------------------------------------------------------
+void readTemperatureDS18B20( )
+{
+  DS18B20Sensor.requestTemperatures( );
+  ds18b20Temperature = DS18B20Sensor.getTempCByIndex( 0 );
+  if ( configuration.temperatureMode == 'F' )
+  {
+    // Convert celsius to fahrenheight
+    ds18b20Temperature = DallasTemperature::toFahrenheit( ds18b20Temperature );
+  }
+  
+//  Serial.print( "DS18B20 Temp = " );
+//  Serial.println( ds18b20Temperature );
+}
+
+/// ----------------------------------------------------------------------------------------------------
 /// Reads the current temperature from the I2C DS1631 Thermometer 
 /// ----------------------------------------------------------------------------------------------------
-void readTemperature()
+void readTemperatureDS1631()
 {   
     temperatureReadError = true; // Assume read had errors, by default
     
@@ -692,33 +721,16 @@ void readTemperature()
     // T° processing
     if ( _TH >= 0x80 ) //if sign bit is set, then temp is negative
         _TH = _TH - 256; 
-    temperature = _TH + _TL / 256.0;
+    onBoardTemperature = _TH + _TL / 256.0;
       
     if ( configuration.temperatureMode == 'F' )
     {
         // Convert celsius to fahrenheight
-        temperature = toFahrenheight( temperature );
+        onBoardTemperature = DallasTemperature::toFahrenheit( onBoardTemperature );
     }
     
     temperatureReadError = false; // Clear read error - we made it here
 }
-
-/// ----------------------------------------
-/// Converts celsius to fahrenheight
-/// ----------------------------------------
-float toFahrenheight( float celsius )
-{
-      return temperature * 1.8 + 32;
-}
-
-/// ----------------------------------------
-/// Converts fahrenheight to celsius 
-/// ----------------------------------------
-float toCelsius( float fahrenheight )
-{
-      return ( temperature - 32 ) * 1.8;
-}
-
 
 /// ----------------------------------------------------------------------------------------------------
 /// Print the current temperature (only if it has been a changed)
@@ -732,14 +744,14 @@ void printTemperature()
     else
     {
         // Optimization: Don't print the temperature if nothing has changed since the last printing
-        if ( !temperatureReadError && ( CompareFloats( lastTemperature, temperature ) ) )
+        if ( !temperatureReadError && ( CompareFloats( lastTemperature, ds18b20Temperature ) ) )
         {
             return;
         }
     }
 
     // Keep the current gear position, to optimize display time
-    lastTemperature = temperature;
+    lastTemperature = ds18b20Temperature;
 
     // Print temperature label
     lcd.setCursor( 0, 11 );
@@ -752,7 +764,7 @@ void printTemperature()
     {
         temperatureValue = " ERR  ";
     }
-    else if ( temperature < -55 )
+    else if ( ds18b20Temperature < -55 )
     {
         // Workaround when there are odd readings on first seconds when temperature sensor is starting up
         temperatureValue = " ----";
@@ -761,7 +773,7 @@ void printTemperature()
     {      
         // format temperature into a fixed .1 format (e.g. 62.5 or 114.4 [too hot to ride! :) ] or -10.7 [too cold to ride! :) ])
         char formattedTemperature[7]; // [-]DDD.D + NULL => Maximum 7 characters (NULL included)
-        dtostrf(temperature, 6, 1, formattedTemperature );
+        dtostrf(ds18b20Temperature, 6, 1, formattedTemperature );
         temperatureValue = formattedTemperature;
         
         // Add temperature mode unit
@@ -863,7 +875,7 @@ bool initializeDS1631()
   Wire.write((int)( DS1631_I2C_COMMAND_STOP_CONVERT )); // Stop conversion
   if ( Wire.endTransmission() )
   {
-    Serial.println( ">> Error: Stop Convert command failed" );
+    Serial.println( F( ">> Error: Stop Convert command failed" ) );
     return false; // Error
   }
     
@@ -872,7 +884,7 @@ bool initializeDS1631()
   Wire.write((int)( DS1631_I2C_COMMAND_ACCESS_CONFIG ));
   if ( Wire.endTransmission() )
   {
-      Serial.println( ">> Error: Access Config command failed" );
+      Serial.println( F( ">> Error: Access Config command failed" ) );
       return false; // Error
   }
 
@@ -886,7 +898,7 @@ bool initializeDS1631()
   Wire.write( DS1631_I2C_CONTROLBYTE_CONT_12BIT ); // Continuous conversion & 12 bits resolution
   if ( Wire.endTransmission() )
   {
-      Serial.println( ">> Error: Access Continous Control Byte command failed" );
+      Serial.println( F( ">> Error: Access Continous Control Byte command failed" ) );
       return false; // Error
   }
 
@@ -895,7 +907,7 @@ bool initializeDS1631()
   Wire.write((int) DS1631_I2C_COMMAND_START_CONVERT); // Start Conversion
   if ( Wire.endTransmission() )
   {
-      Serial.println( ">> Error: Start Convert command failed" );
+      Serial.println( F( ">> Error: Start Convert command failed" ) );
       return false; // Error
   }
   
@@ -972,7 +984,7 @@ void processSerialInput()
         // handle command line
         serialCommandLine.toUpperCase();
         Serial.println();
-        Serial.print( "Recieved: " ); Serial.println( serialCommandLine );
+        Serial.print( F( "Recieved: " ) ); Serial.println( serialCommandLine );
         
         // Parse command line into tokens
         serialCommandLine.concat( commandArgDelimiter ); // To ensure that the last token is read stopping properly
@@ -1023,6 +1035,79 @@ void processSerialInput()
   }
 }
 
+void printStat()
+{
+    Serial.print( F( "Tob=" ) );
+    Serial.print( onBoardTemperature, 2 );
+    Serial.println( configuration.temperatureMode  );
+
+    Serial.print( F( "T=" ) );
+    Serial.print( ds18b20Temperature, 2 );
+    Serial.println( configuration.temperatureMode  );
+
+    Serial.print( "VCC=" ); Serial.println( vccRunningAvg.getAverage(),2);
+    
+    Serial.print( F( "Gear=" ) );
+    if ( gear == 0 )
+        Serial.println( "N" );
+    else
+        Serial.println( gear );
+    Serial.print( F( "GearV=" ) ); Serial.println( gearPositionVolts );
+    Serial.print( F( "Batt=" ) ); Serial.println( battLevel );    
+    Serial.print( F( "LCD=" ) ); Serial.println( lcdInitialized ) ;
+    Serial.print( F( "LCD BL=" ) ); Serial.println( lcdBackLight );
+    Serial.print( F( "LCD CT=" ) ); Serial.println( lcdContrast );
+    Serial.print( F( "CdS=" ) ); Serial.println( photoCellLevel ); 
+    // Important Note: The serial buffer is limited to 128 bytes. 
+    //       Keep it short, or an overflow will occur (currupted memory/hang up)
+}
+
+void handleSetCfg( String arg1, String arg2 )
+{
+    if ( arg1.length() == 0 )
+        Serial.println( F( "Syntax error: arg1" ) );
+    else if ( arg2.length() == 0 )
+        Serial.println( F( "Syntax error: arg2" ) );
+    else            
+    {
+        if ( arg1 == CMD_ARG_TEMP )
+        {
+             char tempMode = arg2[0];
+             if ( configuration.temperatureMode != tempMode )
+             {
+                configuration.temperatureMode = tempMode;
+                // Recalc last temperatures in new mode
+                if ( tempMode == 'F' )
+                {
+                    lastTemperature = DallasTemperature::toFahrenheit( ds18b20Temperature ); 
+                    lastOnBoardTemperature = DallasTemperature::toFahrenheit( onBoardTemperature ); 
+                }
+                else
+                {
+                    lastTemperature = DallasTemperature::toCelsius( ds18b20Temperature ); 
+                    lastOnBoardTemperature = DallasTemperature::toCelsius( onBoardTemperature );                    
+                }
+                
+                writeConfiguration();
+                
+                isForceRefreshTemp = true;
+                temperatureTimedAction.force();
+
+                Serial.print( F( "Temp mode set to: " ) ); Serial.println( tempMode );
+                
+            }
+            else
+            {
+                Serial.print( F( "Nothing done" ) );
+            }           
+        }
+        else
+        {
+            Serial.print( F( "Unkonwn token2: " ) ); Serial.println( arg1 );
+        }
+    }
+}
+
 /// ----------------------------------------------------------------------------------------------------
 /// Handle a single command 
 /// ----------------------------------------------------------------------------------------------------
@@ -1034,29 +1119,7 @@ void handleCommand( String cmd, String arg1, String arg2 )
         }
         else if ( cmd == CMD_STAT )
         {
-            Serial.print( "Temp. = " );
-            Serial.print( temperature );
-            Serial.println( configuration.temperatureMode  );
-
-            Serial.print( "VCC = " );
-            Serial.println( vccRunningAvg.getAverage(), DEC );
-
-            Serial.print( "Gear = " );
-            if ( gear == 0 )
-                Serial.println( "N" );
-            else
-                Serial.println( gear );
-            Serial.print( "GearPos = " ); Serial.print( gearPositionVolts ); Serial.println( "V" );
-
-            Serial.print( "Batt. Level = " );
-            Serial.print( battLevel ); Serial.println( "V" );
-
-            Serial.print( "LCD Initialized: " ); Serial.println( lcdInitialized ) ;
-            Serial.print( "LCD Back Light = " ); Serial.println( lcdBackLight );
-            Serial.print( "LCD Contrast = " ); Serial.println( lcdContrast );
-            Serial.print( "Photo Cell = " ); Serial.println( photoCellLevel ); 
-            // Important Note: for some unknown reason, the serial printing cannot be too large. It seems that the Serial buffer size is limited. Flush() doesn't do what its supposed to do.
-            //       Keep it short, or maybe add some delay to let the stream clear itself.
+           printStat();
         }
         else if ( cmd == CMD_CONFIG )
         {
@@ -1075,47 +1138,14 @@ void handleCommand( String cmd, String arg1, String arg2 )
         }
         else if ( cmd == CMD_SETCFG )
         {
-            if ( arg1.length() == 0 )
-                Serial.println( "Syntax error: arg1" );
-            else if ( arg2.length() == 0 )
-                Serial.println( "Syntax error: arg2" );
-            else            
-            {
-                if ( arg1 == CMD_ARG_TEMP )
-                {
-                     char tempMode = arg2[0];
-                     if ( configuration.temperatureMode != tempMode )
-                     {
-                        configuration.temperatureMode = tempMode;
-                        // Recalc last temperature to avoid restarting DS1631
-                        if ( tempMode == 'F' )
-                            lastTemperature = toFahrenheight( temperature ); 
-                        else
-                           lastTemperature = toCelsius( temperature );
-                        
-                        writeConfiguration();
-                        
-                        isForceRefreshTemp = true;
-                        temperatureTimedAction.force();
-
-                        Serial.print( "Temp mode set to: " ); Serial.println( tempMode );
-                        
-                    }
-                    else
-                    {
-                        Serial.print( "Nothing done" );
-                    }           
-                }
-                else
-                {
-                    Serial.print( "Unkonwn token2: " ); Serial.println( arg1 );
-                }
-            }
+            handleSetCfg( arg1, arg2 );           
         }
         else
         {
             Serial.println( MSG_SYNTAX_1 );
+            Serial.flush();
             Serial.println( MSG_SYNTAX_2 );
+            Serial.flush();
         }
 }
 

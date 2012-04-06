@@ -33,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.40"
+#define VERSION "0.41"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
@@ -45,7 +45,7 @@
 // Temperature mode - F or C
 #define DEFAULT_TEMPERATURE_MODE 'F'
 
-#define SERIAL_SPEED 9600
+#define SERIAL_SPEED 38400
 
 // ------------------------- LCD -------------------------------------------
 #define LCD_ROWS 2
@@ -194,8 +194,10 @@ struct config_t
 byte dac_value=0;     // output 0..255 -> 0-5V (or VSS..VREF)
 byte all_adc_values[4];   // Input 0..255 -> 0-5V  (or VSS..VREF)
 
-float temperature = 0;  // Farenheit
+float ds18b20Temperature = 0;  // Farenheit
+float onBoardTemperature = 0;  // Farenheit
 float lastTemperature = -99; // Force initial update
+float lastOnBoardTemperature = -99;
 byte temperatureReadError = 0;
 
 short gear = 0;               // 0 = Neutral, or 1-6
@@ -290,21 +292,21 @@ RunningAverage gearLevelRunAvg(GEAR_WINDOW_SIZE);
 
 #define CMD_ARG_TEMP   "TEMP"
 
-#define MSG_STROMPUTER_READY     ">> Stromputer ON. Ready to Rock! <<"
-#define MSG_FIRMWARE             "------- Stromputer, Firmware version: "
-#define MSG_SHOW_ALL_GEAR_LEDS   ">> Show all Gear LEDs" 
-#define MSG_TEST_EACH_GEAR_LED   ">> Test each Gear LED" 
-#define MSG_LCD_INIT_BEGIN       ">> LCD Initializing.." 
-#define MSG_LCD_INIT_END         ">> LCD Initialized"
-#define MSG_DS1631_INIT_BEGIN    ">> DS1631 Initializing.." 
-#define MSG_DS1631_INIT_END      ">> DS1631 Initialized"
-#define MSG_WELCOME_BEGIN        ">> Show Welcome - BEGIN.."
-#define MSG_WELCOME_END          ">> Show Welcome - END"
-#define MSG_SYNTAX_1             "SYNTAX: CMD [ARG1] [ARG2];"
-#define MSG_SYNTAX_2             "   CMD = {ALIVE | TEST | STAT | SETCFG}"
-#define MSG_ISALIVE              "Yes, I'm here" 
+#define MSG_STROMPUTER_READY     F( ">> Stromputer ON. Ready to Rock! <<" )
+#define MSG_FIRMWARE             F( "------- Stromputer, Firmware version: " )
+#define MSG_SHOW_ALL_GEAR_LEDS   F( ">> Show all Gear LEDs" )
+#define MSG_TEST_EACH_GEAR_LED   F( ">> Test each Gear LED" )
+#define MSG_LCD_INIT_BEGIN       F( ">> LCD Initializing.." )
+#define MSG_LCD_INIT_END         F( ">> LCD Initialized" )
+#define MSG_DS1631_INIT_BEGIN    F( ">> DS1631 Initializing.." )
+#define MSG_DS1631_INIT_END      F( ">> DS1631 Initialized" )
+#define MSG_WELCOME_BEGIN        F( ">> Show Welcome - BEGIN.." )
+#define MSG_WELCOME_END          F( ">> Show Welcome - END" )
+#define MSG_SYNTAX_1             F( "SYNTAX: CMD [ARG1] [ARG2];" )
+#define MSG_SYNTAX_2             F( "   CMD = {ALIVE | TEST | STAT | SETCFG}" )
+#define MSG_ISALIVE              F( "Yes, I'm here" )
 
-#define ERR_LCD_INIT_FAILED      ">> ERROR: LCD failed to initialize"
-#define ERR_DS1631_INIT_FAILED   ">> ERROR: DS1631 failed to initialize" 
+#define ERR_LCD_INIT_FAILED      F( ">> ERROR: LCD failed to initialize" )
+#define ERR_DS1631_INIT_FAILED   F( ">> ERROR: DS1631 failed to initialize" )
 
 #endif

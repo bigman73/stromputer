@@ -199,6 +199,7 @@ float onBoardTemperature = 0;  // Farenheit
 float lastTemperature = -99; // Force initial update
 float lastOnBoardTemperature = -99;
 byte temperatureReadError = 0;
+byte onBoardTemperatureReadError = 0;
 
 short gear = 0;               // 0 = Neutral, or 1-6
 long transientGearStartMillis = 0;

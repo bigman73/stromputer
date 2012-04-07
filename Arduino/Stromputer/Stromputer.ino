@@ -169,6 +169,10 @@ void setup()
     Timer1.initialize( TIMER1_RESOLUTION );
     Timer1.attachInterrupt( timerISR ); // attach the service routine here
  
+    battLevelTimedAction.force();
+    temperatureTimedAction.force();
+    photoCellTimedAction.force();
+    
     forceLCDRefresh( true );
      
     Serial.println( MSG_STROMPUTER_READY );
@@ -660,7 +664,7 @@ void processTemperature()
        
     // Workaround to a problem with DS1631: From time to time, the IC goes nuts and starts returning odd readings (TODO: Check if related to pull up resistor values, or breadboard, or the generic IC socket
     // Check if DS1631 is returning bad temperature vlaues (but not on boot last temperature is set to -99), if yes, re-establish communication with it
-    if ( !temperatureReadError && lastOnBoardTemperature > TEMPERATURE_MIN_VALID && abs( lastOnBoardTemperature - onBoardTemperature ) > TEMPERATURE_ERROR_DIFF )
+    if ( !onBoardTemperatureReadError && lastOnBoardTemperature > TEMPERATURE_MIN_VALID && abs( lastOnBoardTemperature - onBoardTemperature ) > TEMPERATURE_ERROR_DIFF )
     {
         // Re-Initialize DS1631 - Stop temperature conversion, and start it again
         initializeDS1631();
@@ -671,7 +675,7 @@ void processTemperature()
         // If still there are odd readings then declare temperature error mode
         if ( abs( lastOnBoardTemperature - onBoardTemperature ) > TEMPERATURE_ERROR_DIFF )
         {
-            temperatureReadError = true;
+            onBoardTemperatureReadError = true;
         }
     }
 
@@ -683,16 +687,18 @@ void processTemperature()
 /// ----------------------------------------------------------------------------------------------------
 void readTemperatureDS18B20( )
 {
-  DS18B20Sensor.requestTemperatures( );
-  ds18b20Temperature = DS18B20Sensor.getTempCByIndex( 0 );
-  if ( configuration.temperatureMode == 'F' )
-  {
-    // Convert celsius to fahrenheight
-    ds18b20Temperature = DallasTemperature::toFahrenheit( ds18b20Temperature );
-  }
+    temperatureReadError = true;
+    
+    DS18B20Sensor.requestTemperatures( );
+    ds18b20Temperature = DS18B20Sensor.getTempCByIndex( 0 );
+    if ( ds18b20Temperature == DEVICE_DISCONNECTED )
+        return;
+    
+    if ( configuration.temperatureMode == 'F' )
+        // Convert celsius to fahrenheight
+        ds18b20Temperature = DallasTemperature::toFahrenheit( ds18b20Temperature );
   
-//  Serial.print( "DS18B20 Temp = " );
-//  Serial.println( ds18b20Temperature );
+    temperatureReadError = false;
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -700,7 +706,7 @@ void readTemperatureDS18B20( )
 /// ----------------------------------------------------------------------------------------------------
 void readTemperatureDS1631()
 {   
-    temperatureReadError = true; // Assume read had errors, by default
+    onBoardTemperatureReadError = true; // Assume read had errors, by default
     
     // READ T° from DS1631
     Wire.beginTransmission( DS1631_I2C_ADDRESS );
@@ -729,7 +735,7 @@ void readTemperatureDS1631()
         onBoardTemperature = DallasTemperature::toFahrenheit( onBoardTemperature );
     }
     
-    temperatureReadError = false; // Clear read error - we made it here
+    onBoardTemperatureReadError = false; // Clear read error - we made it here
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -1035,17 +1041,30 @@ void processSerialInput()
   }
 }
 
+/// ----------------------------------------------------------------------------------------------------
+/// Prints the current device status into the Serial output
+/// ----------------------------------------------------------------------------------------------------
 void printStat()
 {
     Serial.print( F( "Tob=" ) );
-    Serial.print( onBoardTemperature, 2 );
-    Serial.println( configuration.temperatureMode  );
+    if ( onBoardTemperatureReadError )
+      Serial.println( F( "ERROR" ) );
+    else
+    {
+      Serial.print( onBoardTemperature, 2 );
+      Serial.println( configuration.temperatureMode  );
+    }
 
     Serial.print( F( "T=" ) );
-    Serial.print( ds18b20Temperature, 2 );
-    Serial.println( configuration.temperatureMode  );
+    if ( temperatureReadError )
+      Serial.println( F( "ERROR" ) );
+    else
+    {
+      Serial.print( ds18b20Temperature, 2 );
+      Serial.println( configuration.temperatureMode  );
+    }    
 
-    Serial.print( "VCC=" ); Serial.println( vccRunningAvg.getAverage(),2);
+    Serial.print( F( "VCC=" ) ); Serial.println( vccRunningAvg.getAverage(),2);
     
     Serial.print( F( "Gear=" ) );
     if ( gear == 0 )

@@ -931,7 +931,7 @@ void showWelcome()
     
     showAllGearLEDs();
 
-    String line2 = String(Welcome1_Line2);
+    String line2 = String( Welcome1_Line2);
     line2 += VERSION;
     printWelcomeScreen(String(Welcome1_Line1), line2, 800, 25, DIRECTION_RIGHT );
    
@@ -1081,6 +1081,9 @@ void printStat()
     //       Keep it short, or an overflow will occur (currupted memory/hang up)
 }
 
+/// ----------------------------------------------------------------------------------------------------
+/// Handles setting a persistent configration parameter
+/// ----------------------------------------------------------------------------------------------------
 void handleSetCfg( String arg1, String arg2 )
 {
     if ( arg1.length() == 0 )
@@ -1162,9 +1165,7 @@ void handleCommand( String cmd, String arg1, String arg2 )
         else
         {
             Serial.println( MSG_SYNTAX_1 );
-            Serial.flush();
             Serial.println( MSG_SYNTAX_2 );
-            Serial.flush();
         }
 }
 

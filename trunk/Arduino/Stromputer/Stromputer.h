@@ -278,7 +278,7 @@ RunningAverage gearLevelRunAvg(GEAR_WINDOW_SIZE);
 #define DIRECTION_RIGHT 'R'
 
 // UI Labels
-#define GEAR_LABEL         "Gear " 
+#define GEAR_LABEL         "Gear "
 #define TEMPERATURE_LABEL  "Temp  "
 #define BATTERY_LABEL      "Batt  "
 #define Welcome1_Line1     "Stromputer-DL650"

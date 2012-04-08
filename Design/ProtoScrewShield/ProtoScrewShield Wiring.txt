@@ -25,7 +25,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-Battery Voltage Divider (A0)
+Battery Voltage Divider (A0) [Blue wire]
 -----------------------------
 B7:P7 - Jumper Battry (+)/POS  
 P6:P4 - RB1 = 39KOhm
@@ -34,17 +34,17 @@ P3:M3 (GND) - RB2 = 120KOhm
 Gear Voltage Divider (A1)
 --------------------------
 
-Q7 - Gear Position Sensor wire [Pink wire on V-Strom, Green wire]
-Q6:Q4 - RG1 = 33KOhm 
-Q3:M4 (GND) - RG2  = 33KOhm, standing vertically, M4 Exposed wire leg but insulatd with heat shrink
+Q7 - Gear Position Sensor wire [Green wire, posi-tapped to Pink wire on V-Strom]
+Q6:Q4 - RG1 = 10Kohm, standing vertically (Ultra High Precision Resistor - Dale RN55C1002B)
+Q3:M4 (GND) - RG2  = 10Kohm (Same resistor as RG1)
 Q4:Q5 - JUMPER
 
 
 Photo Light Sensor/CdS (A2)
 ----------------------------
-Q8 (VDD/5V) - CdS ORANGE-WHITE wire on GREY CABLE, Yellow wire on shield
+Q8 (VDD/5V) - CdS ORANGE-WHITE wire on LAN1, Yellow wire on shield
 R7:R9 (GND) - Rcds = 10KOhm
-R6 - CdS ORANGE wire on GREY CABLE 
+R4 - CdS ORANGE wire on LAN1
 R3:R5 - JUMPER
 
 
@@ -64,18 +64,22 @@ R9  - Pin 1 (SDA)
 S9  - Pin 2 (SCK)
 T9  - Pin 3 (TOUT- Not used)
 Y9  - Pin 4 (GND)
-Y12 - Pin 5 (A2)
-T12 - Pin 6 (A1)
-S9  - Pin 7 (A0)
+Y12 - Pin 5 (ADDR2)
+T12 - Pin 6 (ADDR1) 
+S9  - Pin 7 (ADDR0) 
 R9  - Pin 8 (VDD)
 
-R9:T3 - JUMPER SDA-A4
-S9:U3 - JUMPER SCK-A5
-U9:U8 - JUMPER GND
-U12:U14 - JUMPER A2-GND
-T12:T14 - JUMPER A1-GND
-S12:S14 - JUMPER A0-GND
-R12:R13 - JUMPER VDD-5V
+R9:T3 - Grey JUMPER SDA-[PORT A4]
+S9:U3 - White/Brown JUMPER SCK-[PORT A5]
+U9:U8 - Black JUMPER GND Center Rail
+U12:U14 - Black JUMPER A2-GND Right Rail
+T12:T14 - Black JUMPER A1-GND Right Rail
+S12:S14 - Black JUMPER A0-GND Right Rail
+R12:R13 - Red JUMPER VDD-5V Right Rail
+
+OneWire (D4, DS18B20 temp sensor)
+-----------------------------
+[PORT D4]:Q13 - Rdq = 4.7KOhm (Dq Pull-Up resistor)
 
 
 
@@ -92,7 +96,7 @@ J5:L3 - GND JUMPER 2
 C7:G7 - VCC JUMPER 1
 G5:I5 - VCC Jumper 2
 
-sLM2940:
+LM2940:
 I7: I (Input - 12-20V)
 J7: G (GND)
 K7: (Output - 9V)
@@ -111,42 +115,42 @@ SHIELD SCREW IN PORTS:
 ----------------------
 LEFT SIDE:
 ----------
-5V  - LCD +, Grey sheath green
-GND - Battery GND
-GND - LCD GND, Grey sheath blue/black
-VIN 
-RST
-3V3
-5V
-GND
-GND
-VIN
-A0
-A1
-A2
-A3
-A4 - SDA (I2C DATA),  Grey sheath white/blue
-A5 - SCK (I2C CLOCK), Grey sheath white/green
-GND
-GND
+5V      LCD +/LAN1 green
+GND     Battery GND
+GND     LCD GND/LAN1 blue/black
+VIN     Purple Wire
+RST     N/C
+3V3     N/C
+5V      N/C
+GND     LAN1 Brown (OneWire GND)
+GND     N/C
+VIN     N/C
+A0      N/C
+A1      N/C [A1 inside Was used for Gear Voltage Divider]
+A2      N/C
+A3      N/C
+A4      SDA (I2C DATA),  LAN1 white/blue
+A5      SCK (I2C CLOCK), LAN1 white/green
+GND     N/C
+GND     N/C
 
 RIGHT SIDE:
 ----------
-AREF
-GND
-D13
-D12
-D11 - GEAR LED6/Blue sheath blue
-D10 - GEAR LED5/Blue sheath white/blue
-D9  - GEAR LED4/Blue sheath white/orange
-D8  
-D7
-D6  - GEAR LED3/Blue sheath orange
-D5  - GEAR LED2/Blue sheath white/green
-D4   
-D3  - GEAR LED1/Blue sheath green
-D2
-TX
-RX
-GND - Blue sheath white/brown
-GND - Blue sheath brown
+AREF   N/C
+GND    N/C
+D13    N/C
+D12    N/C
+D11    GEAR LED6/LAN2 blue
+D10    GEAR LED5/LAN2 white/blue
+D9     GEAR LED4/LAN2 white/orange
+D8     N/C 
+D7     N/C
+D6     GEAR LED3/LAN2 orange
+D5     GEAR LED2/LAN2 white/green
+D4     OneWire DQ (DS18B20)/LAN1 white/brown
+D3     GEAR LED1/LAN2 green
+D2     N/C
+TX     N/C
+RX     N/C
+GND    LAN2 white/brown
+GND    LAN2 brown

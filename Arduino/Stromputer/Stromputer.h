@@ -33,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.41"
+#define VERSION "0.42"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts

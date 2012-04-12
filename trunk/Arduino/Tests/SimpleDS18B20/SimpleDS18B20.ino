@@ -16,6 +16,10 @@ void setup(void)
   Serial.begin(38400);
   Serial.println("Dallas Temperature IC Control Library Demo");
 
+ // initialize the digital pin as an output.
+  // Pin 13 has an LED connected on most Arduino boards:
+  pinMode(13, OUTPUT);     
+  
   // Start up the library
   sensors.begin();
 }
@@ -42,5 +46,10 @@ void loop(void)
     Serial.print( tempValue ); 
     Serial.println("C");
   }
-  
+
+ 
+  digitalWrite(13, LOW);    // set the LED off
+ 
+  digitalWrite(13, HIGH);   // set the LED on  
+  delay( 500 );
 }

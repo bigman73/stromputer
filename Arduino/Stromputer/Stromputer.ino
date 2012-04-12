@@ -760,8 +760,8 @@ void printTemperature()
     lastTemperature = ds18b20Temperature;
 
     // Print temperature label
-    lcd.setCursor( 0, 11 );
-    lcd.print( TEMPERATURE_LABEL );     
+//    lcd.setCursor( 0, 11 );
+//    lcd.print( TEMPERATURE_LABEL );     
 
     // Print temperature value
     String temperatureValue;
@@ -793,6 +793,9 @@ void printTemperature()
         }
     }
     
+    lcd.setCursor( 0, 11u );
+    lcd.print( onBoardTemperature );
+
     lcd.setCursor( 1, 9 );
     lcd.print( temperatureValue );
 }

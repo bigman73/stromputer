@@ -35,6 +35,9 @@
 
 #define VERSION "0.42"
 
+// Macro for defining PROGMEM (Flash) Strings
+#define FS( text ) (const char*)F("text")
+
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
 #define SHOW_WELCOME

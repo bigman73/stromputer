@@ -24,6 +24,8 @@ void setup(void)
   sensors.begin();
 }
 
+int led = 0;
+
 void loop(void)
 { 
   // call sensors.requestTemperatures() to issue a global temperature 
@@ -45,11 +47,15 @@ void loop(void)
   {
     Serial.print( tempValue ); 
     Serial.println("C");
+    Serial.print( DallasTemperature::toFahrenheit( tempValue ) ); 
+    Serial.println("F");
   }
 
+  led = !led; 
  
-  digitalWrite(13, LOW);    // set the LED off
- 
-  digitalWrite(13, HIGH);   // set the LED on  
+  if (!led )
+      digitalWrite(13, LOW);    // set the LED off
+  else
+      digitalWrite(13, HIGH);   // set the LED on  
   delay( 500 );
 }

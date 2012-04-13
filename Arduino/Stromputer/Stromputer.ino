@@ -67,6 +67,7 @@
 // []     0.31 -   3/10/2012 + Fixed gear voltage ranges (measured on bike)
 // []     0.40 -   3/29/2012 + Fixed ADC measuring error (battery and on-board temperature). VCC is not 5.0V and can change. Internal volt reference (1.1V) is used as a reference
 // []                        + Using RunningAverage library for smoothing reading of input (Battery, Gear, Temperature)
+// []     0.42 -   4/12/2012 + Gear ADC finally fixed - Resistors changed to 499KOhm military spec (low PPM, high precision).
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -103,8 +104,6 @@
 #include <DallasTemperature.h>
 
 #include <RunningAverage.h>
-
-// TODO: Replace resistors in voltage dividers with accurate, low PPM/C resistors
 
 // -----------------------------------------------------------------
 
@@ -186,7 +185,7 @@ void loop()
 {
     serialInputTimedAction.check();
     lcdDisplayTimedAction.check();
-
+    
     delay(LoopSleepTime);
 }
 
@@ -286,10 +285,6 @@ void forceLCDRefresh( bool forceNow )
 /// --------------------------------------------------------------------------
 void processBatteryLevel()
 {   
-    float vcc = readVcc();
-
-    vccRunningAvg.addValue( vcc );
-    
     readBatteryLevelAnalog();
     
     // When 'live' on the motorcycle, there is a 0.9V difference between what Arduino samples and what a volt meter samples.
@@ -310,8 +305,7 @@ void readBatteryLevelAnalog()
 
     int adcValue = analogRead( ANALOGPIN_BATT_LEVEL );    // read the input pin for Battery Level
     
-    float avgVcc = vccRunningAvg.getAverage();
-    float currentBattLevel = BATT_VOLT_DIVIDER * avgVcc * ( adcValue / 1024.0f );
+    float currentBattLevel = 5.0f * BATT_VOLT_DIVIDER * ( adcValue / 1024.0f );
     currentBattLevel = constrain( currentBattLevel, 0.01f, 20.0f );
 
     // Trim the battery level average when the switch is turned on for the first time
@@ -442,8 +436,7 @@ void readGearPositionAnalog()
    
     int value = analogRead( ANALOGPIN_GEAR_POSITION );
         
-    float avgVcc = vccRunningAvg.getAverage();
-    float currentGearPositionVolts = GEAR_VOLT_DIVIDER * avgVcc * ( value / 1024.0f );    // read the input pin for Gear Position
+    float currentGearPositionVolts = 5.0f * GEAR_VOLT_DIVIDER * ( value / 1024.0f );    // read the input pin for Gear Position
     // Constrain the input reading, to reduce errors
     currentGearPositionVolts = constrain( currentGearPositionVolts, 0.01f, 5.0f );
 
@@ -465,10 +458,6 @@ void readGearPositionAnalog()
     gearReadError = false; // Clear read error - we made it here
 }
 
-// Reference voltage - used to fixed the gear position voltage differences created in the V-Strom due to temperature changes inside the transmission
-//   e.g. When the motorcycle is cold 1st gear is 1.00V, but when it is hot 1st gear is 1.33V. Also N is 4.6V cold and 4.95V hot.
-float vref = 0;
-
 // ----------------------------------------------------------------------------------------------------
 /// Determins the current gear from the gear position volts
 /// ----------------------------------------------------------------------------------------------------
@@ -476,8 +465,7 @@ void determineCurrentGear()
 {
      short lastTransientGear = transientGear;
 
-     // Calculate fixed gear position volts - take vref into consideration
-     float fixedGearPositionVolts = gearPositionVolts + vref;
+     float fixedGearPositionVolts = gearPositionVolts;
      
      if ( IsBetween( fixedGearPositionVolts,  GEAR1_FROM_VOLTS, GEAR1_TO_VOLTS ) )
          transientGear = 1;
@@ -511,14 +499,6 @@ void determineCurrentGear()
          {
              // Make transient gear change a stable gear change
              gear = transientGear;
-             // DISABLED TEMPORARLY to check if vcc read fixed issues
-             /*
-             if ( gear == 1 && battLevel > 9 and gearPositionVolts > 0.9f )
-             {
-                 // Recalc vref based on 1st gear readings
-                 // vref = GEAR1_DEFAULT - gearPositionVolts;
-             }
-             */
              
              transientGear = GEAR_ERROR;
          }
@@ -539,14 +519,6 @@ void printGearPosition()
     dtostrf(gearPositionVolts, 4, 2, buffer );
     lcd.print( buffer );
     
-    lcd.setCursor( 0, 0 );
-    dtostrf(vccRunningAvg.getAverage(), 4, 2, buffer );
-    lcd.print( buffer );
-    lcd.print( "V" );
-
-/*    lcd.setCursor( 0, 11 );
-    dtostrf(vref, 4, 2, buffer ); 
-    lcd.print( buffer );*/
     #endif
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -679,7 +651,14 @@ void processTemperature()
         }
     }
 
-    printTemperature();   
+    printTemperature(); 
+  
+    // ******** Handle AUTO STAT Mode **************
+    if ( autoStat )
+    {
+      printStat();
+    }
+    // *********************************************
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -793,10 +772,15 @@ void printTemperature()
         }
     }
     
-    lcd.setCursor( 0, 11u );
-    lcd.print( onBoardTemperature );
-
     lcd.setCursor( 1, 9 );
+    lcd.print( temperatureValue );
+
+    // -- DEBUG OnBoard temperature
+    char formattedTemperature[7]; // [-]DDD.D + NULL => Maximum 7 characters (NULL included)
+    dtostrf(onBoardTemperature, 6, 1, formattedTemperature );
+    temperatureValue = formattedTemperature;
+    temperatureValue += "*";
+    lcd.setCursor( 0, 11 );
     lcd.print( temperatureValue );
 }
 /// ------------------------------------------------------------
@@ -1067,8 +1051,6 @@ void printStat()
       Serial.println( configuration.temperatureMode  );
     }    
 
-    Serial.print( F( "VCC=" ) ); Serial.println( vccRunningAvg.getAverage(),2);
-    
     Serial.print( F( "Gear=" ) );
     if ( gear == 0 )
         Serial.println( "N" );
@@ -1079,7 +1061,8 @@ void printStat()
     Serial.print( F( "LCD=" ) ); Serial.println( lcdInitialized ) ;
     Serial.print( F( "LCD BL=" ) ); Serial.println( lcdBackLight );
     Serial.print( F( "LCD CT=" ) ); Serial.println( lcdContrast );
-    Serial.print( F( "CdS=" ) ); Serial.println( photoCellLevel ); 
+    Serial.print( F( "CdS=" ) ); Serial.println( photoCellLevel );
+    Serial.println( F( "------------------" ) ); 
     // Important Note: The serial buffer is limited to 128 bytes. 
     //       Keep it short, or an overflow will occur (currupted memory/hang up)
 }
@@ -1138,38 +1121,41 @@ void handleSetCfg( String arg1, String arg2 )
 /// ----------------------------------------------------------------------------------------------------
 void handleCommand( String cmd, String arg1, String arg2 )
 {
-        if ( cmd == CMD_ALIVE )
-        {
-            Serial.println( MSG_ISALIVE );
-        }
-        else if ( cmd == CMD_STAT )
-        {
-           printStat();
-        }
-        else if ( cmd == CMD_CONFIG )
-        {
-           printConfiguration(); 
-        }
-       
-        else if ( cmd == CMD_TEST )
-        {
-           showWelcome(); 
-           // Force immediate refresh
-           forceLCDRefresh( true );
-        }
-        else if ( cmd == CMD_TESTLEDS )
-        {
-            testEachGearLED();
-        }
-        else if ( cmd == CMD_SETCFG )
-        {
-            handleSetCfg( arg1, arg2 );           
-        }
-        else
-        {
-            Serial.println( MSG_SYNTAX_1 );
-            Serial.println( MSG_SYNTAX_2 );
-        }
+      if ( cmd == CMD_ALIVE )
+      {
+          Serial.println( MSG_ISALIVE );
+      }
+      else if ( cmd == CMD_STAT )
+      {
+         printStat();
+      }
+      else if ( cmd == CMD_AUTOSTAT )
+      {
+         autoStat = !autoStat;
+      }
+      else if ( cmd == CMD_CONFIG )
+      {
+         printConfiguration(); 
+      }
+      else if ( cmd == CMD_TEST )
+      {
+         showWelcome(); 
+         // Force immediate refresh
+         forceLCDRefresh( true );
+      }
+      else if ( cmd == CMD_TESTLEDS )
+      {
+          testEachGearLED();
+      }
+      else if ( cmd == CMD_SETCFG )
+      {
+          handleSetCfg( arg1, arg2 );           
+      }
+      else
+      {
+          Serial.println( MSG_SYNTAX_1 );
+          Serial.println( MSG_SYNTAX_2 );
+      }
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -1212,30 +1198,5 @@ void printConfiguration()
     Serial.print( "IsValidConfig (Raw Value): " ); Serial.println( configuration.isValidConfig );
     Serial.print( "IsValidConfig: " ); Serial.println( ( configuration.isValidConfig == 12345 ) ? "Y" : "N" );
     Serial.print( "temperatureMode Mode: " ); Serial.println( configuration.temperatureMode );
-}
-
-/// ----------------------------------------------------------------------------------------------------
-/// Read the internal VCC. Needed for accurate ADV calculations, 5V cannot be assumed.
-// Based on: http://code.google.com/p/tinkerit/wiki/SecretVoltmeter
-// http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1263440087
-/// ----------------------------------------------------------------------------------------------------
-float readVcc() 
-{
-    long vccValue;
-    // Read 1.1V reference against AVcc
-    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-    delay(2); // Wait for Vref to settle
-    ADCSRA |= _BV(ADSC); // Convert
-    while (bit_is_set(ADCSRA,ADSC));
-    vccValue = ADCL;
-    vccValue |= ADCH<<8;
-    vccValue = 1126400L / vccValue; // Back-calculate AVcc in mV
-  
-    // Convert mV integer to V (float)
-    float result = vccValue / 1000.0f;
-    // Constrain VCC between 0 .. 5.5
-    result = constrain( result, 0.01f, 5.5f );
-    
-    return result;
 }
 

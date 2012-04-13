@@ -125,11 +125,11 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 #define BUTTON_DOWN 0
 
 // Battery level (4:1 voltage divider) is connected to Analog Pin 0
-#define ANALOGPIN_BATT_LEVEL 0
+#define ANALOGPIN_BATT_LEVEL A0
 // Gear Position (2:1 voltage divider) is connected to Analog Pin 1
-#define ANALOGPIN_GEAR_POSITION 1
+#define ANALOGPIN_GEAR_POSITION A3
 // Photocell level (3K-11K:10K voltage divider) is connected to Analog Pin 2
-#define ANALOGPIN_PHOTCELL 2
+#define ANALOGPIN_PHOTCELL A2
 
 // --- Ethernet Cable #1 ( 'Blue' sheath, right ethernet port )
 //
@@ -201,8 +201,8 @@ float ds18b20Temperature = 0;  // Farenheit
 float onBoardTemperature = 0;  // Farenheit
 float lastTemperature = -99; // Force initial update
 float lastOnBoardTemperature = -99;
-byte temperatureReadError = 0;
-byte onBoardTemperatureReadError = 0;
+bool temperatureReadError = false;
+bool onBoardTemperatureReadError = false;
 
 short gear = 0;               // 0 = Neutral, or 1-6
 long transientGearStartMillis = 0;
@@ -210,7 +210,7 @@ short transientGear = GEAR_ERROR;
 short lastGearLCD = -2;          // Force initial update
 short lastGearLED = -2;       // Force initial update
 float gearVolts[] = { 5, 4.5, 4.8, 4.3 };
-byte gearReadError = 0;
+bool gearReadError = false;
 float gearPositionVolts = 0;
 
 float battLevel;             // Volts
@@ -220,6 +220,8 @@ byte battReadError = 0;
 short photoCellLevel;
 
 short LoopSleepTime = 5; // msec
+
+bool autoStat = false;
 
 long lastForceLCDRefreshMillis = 0;
 bool isForceRefreshBatt = true;
@@ -239,20 +241,18 @@ bool isForceRefreshTemp = true;
 
 // RB1: 39Kohm, Real measured value: 38.2KOhm
 // RB2: 120Kohm, Real measured value: 118.5KOhm
-#define BATT_VOLT_DIVIDER ( 118500.0f + 38200.0f ) / 38200.0f
-// RG1: 33Kohm, Real measured value: 32.4KOhm
-// RG2: 33Kohm, Real measured value: 32.4KOhm
-#define GEAR_VOLT_DIVIDER ( 32400.0f + 32400.0f ) / 32400.0f
+// ( 118500 + 38200 ) / 38200 = 4.102f
+#define BATT_VOLT_DIVIDER 4.102f
+// RG1: 497KOhm
+// RG2: 497KOhm
+// ( 497K + 497K ) / 994K = 2.0f
+#define GEAR_VOLT_DIVIDER 2.0f
 
 #define BATT_WINDOW_SIZE 4
-
-#define VCC_WINDOW_SIZE 16
 
 #define GEAR_WINDOW_SIZE 16    
 
 RunningAverage battRunAvg(BATT_WINDOW_SIZE); 
-// VCC - Operating Voltage of Arduino
-RunningAverage vccRunningAvg(VCC_WINDOW_SIZE);
 
 RunningAverage gearLevelRunAvg(GEAR_WINDOW_SIZE); 
 
@@ -289,6 +289,7 @@ RunningAverage gearLevelRunAvg(GEAR_WINDOW_SIZE);
 
 #define CMD_ALIVE      "ALIVE"
 #define CMD_STAT       "STAT"
+#define CMD_AUTOSTAT   "AUTOSTAT"
 #define CMD_CONFIG     "CONFIG"
 #define CMD_TEST       "TEST"
 #define CMD_SETCFG     "SETCFG"

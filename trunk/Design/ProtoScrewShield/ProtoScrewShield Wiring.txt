@@ -34,6 +34,14 @@ P3:M3 (GND) - RB2 = 120KOhm
 Gear Voltage Divider (A1)
 --------------------------
 
+S7 - Gear Position Sensor wire [Green wire, posi-tapped to Pink wire on V-Strom]
+S5:S3 - RG1 = 499Kohm, standing vertically (Ultra High Precision Resistor - Dale CMF55499K00BEEB)
+S2:S9 (GND) - RG2  = 499Kohm (Same resistor value as RG1)
+
+
+[OBSOLETE] Gear Voltage Divider (A1)
+--------------------------
+
 Q7 - Gear Position Sensor wire [Green wire, posi-tapped to Pink wire on V-Strom]
 Q6:Q4 - RG1 = 10Kohm, standing vertically (Ultra High Precision Resistor - Dale RN55C1002B)
 Q3:M4 (GND) - RG2  = 10Kohm (Same resistor as RG1)

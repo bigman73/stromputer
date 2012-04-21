@@ -68,6 +68,7 @@
 // []     0.40 -   3/29/2012 + Fixed ADC measuring error (battery and on-board temperature). VCC is not 5.0V and can change. Internal volt reference (1.1V) is used as a reference
 // []                        + Using RunningAverage library for smoothing reading of input (Battery, Gear, Temperature)
 // []     0.42 -   4/12/2012 + Gear ADC finally fixed - Resistors changed to 499KOhm military spec (low PPM, high precision).
+// []     0.44 -   4/21/2012 + Restored VREF self learning mechanism
 // []     **** Compatible with ARDUINO: 1.00 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -347,11 +348,11 @@ void printBatteryLevel()
     // Keep the current battery level, to optimize display time
     lastBattLevel = battLevel;
 
-    #ifndef DEBUG_PRINT_GEARVOLTS
+    // TODO RESTORE
+    /*
     // Print Battery Label
     lcd.setCursor( 0, 0 );
-    lcd.print( BATTERY_LABEL );  
-    #endif   
+    lcd.print( BATTERY_LABEL );  */
 
     // Print Battery Value
     String battLevelValue = "X";
@@ -412,7 +413,7 @@ void processPhotoCell()
                   
         forceLedUpdate = true; // Force update of LEDs
          
-        lcd.setCursor( 0, 4 );
+        lcd.setCursor( 1, 9 );
         lcd.print( lcdBackLight );   
 
         lcd.setBacklight( lcdBackLight );
@@ -458,6 +459,11 @@ void readGearPositionAnalog()
     gearReadError = false; // Clear read error - we made it here
 }
 
+
+// Reference voltage - used to fixed an issue gear position voltage differences created by Arduino for some unknown reason (probably heat)
+//   e.g. When the motorcycle is cold 1st gear is 1.35V, but when it is hot (82F+) 1st gear is 0.95V. Also N is 5.0V C cold, and 4.55 @82F
+float vref = 0;
+
 // ----------------------------------------------------------------------------------------------------
 /// Determins the current gear from the gear position volts
 /// ----------------------------------------------------------------------------------------------------
@@ -465,7 +471,8 @@ void determineCurrentGear()
 {
      short lastTransientGear = transientGear;
 
-     float fixedGearPositionVolts = gearPositionVolts;
+     // Calculate fixed gear position volts - take vref into consideration
+     float fixedGearPositionVolts = gearPositionVolts + vrefRunAvg.getAverage();
      
      if ( IsBetween( fixedGearPositionVolts,  GEAR1_FROM_VOLTS, GEAR1_TO_VOLTS ) )
          transientGear = 1;
@@ -500,6 +507,13 @@ void determineCurrentGear()
              // Make transient gear change a stable gear change
              gear = transientGear;
              
+             if ( gear == 1 && battLevel > 9 and gearPositionVolts > 0.9f )
+             {
+                 // Recalc vref based on 1st gear readings
+                 vref = GEAR1_DEFAULT - gearPositionVolts;
+                 vrefRunAvg.addValue( vref );
+             }
+
              transientGear = GEAR_ERROR;
          }
      }
@@ -518,6 +532,14 @@ void printGearPosition()
     lcd.setCursor( 0, 6 );
     dtostrf(gearPositionVolts, 4, 2, buffer );
     lcd.print( buffer );
+    
+    lcd.setCursor( 0, 0 );
+    float vrefAvg = vrefRunAvg.getAverage();
+    dtostrf(vrefAvg, 4, 2, buffer );     
+    lcd.print( buffer );
+    lcd.print( "V" );
+    if ( vrefAvg >= 0.0f )
+        lcd.print( " " );
     
     #endif
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -739,6 +761,7 @@ void printTemperature()
     lastTemperature = ds18b20Temperature;
 
     // Print temperature label
+    // TODO: Restore in the future
 //    lcd.setCursor( 0, 11 );
 //    lcd.print( TEMPERATURE_LABEL );     
 
@@ -780,7 +803,7 @@ void printTemperature()
     dtostrf(onBoardTemperature, 6, 1, formattedTemperature );
     temperatureValue = formattedTemperature;
     temperatureValue += "*";
-    lcd.setCursor( 0, 11 );
+    lcd.setCursor( 0, 9 );
     lcd.print( temperatureValue );
 }
 /// ------------------------------------------------------------

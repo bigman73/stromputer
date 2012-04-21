@@ -33,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "0.43"
+#define VERSION "0.44"
 
 // Macro for defining PROGMEM (Flash) Strings
 #define FS( text ) (const char*)F(text)
@@ -256,6 +256,7 @@ RunningAverage battRunAvg(BATT_WINDOW_SIZE);
 
 RunningAverage gearLevelRunAvg(GEAR_WINDOW_SIZE); 
 
+RunningAverage vrefRunAvg(GEAR_WINDOW_SIZE); 
 
 // msec
 #define MIN_TRANSIENTGEAR_INTERVAL 200

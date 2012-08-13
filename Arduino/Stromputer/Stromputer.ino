@@ -36,43 +36,6 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-// []
-// []
-// []   Versions:
-// []     0.07 - Prototype, ADC worksonly with PCF8591
-// []     0.08 - Prototype, ADC works with Arudino Analog or PCF8591
-// []     0.09 - Prototype, add timed actions - Battery and Temperature should not be polled every loop, just once a few seconds
-// []     0.10 - 12/3/2011, Stable Prototype, first version in Google Code/SVN
-// []     0.11 - 12/4/2011, Added gear led logic in software, refactored code to use ISR for main board blink and gear neutral blinking led, changed welcome screen
-// []     0.12 - 12/5/2011, Added direct gear emulation (tactile button)
-// []     0.13 - 12/9/2011, Added gear led boot test. Last version compatible with Arduino 0023 before moving to Arduino 1.0
-// []     0.14 - 12/9/2011, + All LED control was changed to use the LED Library,
-// []                       + Add force LCD update every 15 seconds (workaround to LCD clearing screen from time to time)
-// []                       + Fixed TimedAction to trigger immediately when sketch starts
-// []     0.15 - 12/10/2011, + Changed custom Timer ISR to TimerOne library, Refactored all constants and variables to Stromputer.h header file
-// []     0.16 - 12/10/2011, + Code refactoring, naming conventions
-// []     0.17 - 12/10/2011 + Moved to Arduino 1.0 (.ino), Main loop slowed down to refersh on 4Hz, removed obsolete PCF8591 gear read logic
-// []     0.18 - 12/13/2011 + Add Photo Cell read/Automatic LCD Backlight Adjustment
-// []     0.19 - 12/24/2011 + Fixed forced refresh, lcd back light value now using average (for smoothing), Fixed temperature error handling
-// []     0.20 - 12/25/2011 + LED Dimming, All LED pins changed to PWM
-// []     0.21 - 12/26/2011 + Fixed minor bug - Neutral light was 'jumping' while light has been dimming.
-// []     0.22 - 12/26/2011 + Adjusted real resistor values
-// []     0.23 -   1/8/2012 + Added time action for checking forced LCD refresh, added serial messages when booting, Added initial Serial Input
-// []     0.24 -   1/14/2012 + Added Serial Commands, removed serial debug
-// []     0.25 -   1/14/2012 + Added Non-Volatile EEPROM configuration (remains after power is shut off, read when rebooting)
-// []     0.26 -   1/21/2012 + Fixed I2C Error Handling, more EEPROM configurations
-// []     0.27 -   1/22/2012 + Fixed some bugs - ISR was disabled on each serial processing, MILETONE: Successful 2ND deployment to V-Strom
-// []     0.28 -   1/23/2012 + Fixed transient/fake Neutral
-// []     0.30 -   2/1/2012  + 
-// []     0.31 -   3/10/2012 + Fixed gear voltage ranges (measured on bike)
-// []     0.40 -   3/29/2012 + Fixed ADC measuring error (battery and on-board temperature). VCC is not 5.0V and can change. Internal volt reference (1.1V) is used as a reference
-// []                        + Using RunningAverage library for smoothing reading of input (Battery, Gear, Temperature)
-// []     0.42 -   4/12/2012 + Gear ADC finally fixed - Resistors changed to 499KOhm military spec (low PPM, high precision).
-// []     0.44 -   4/21/2012 + Restored VREF self learning mechanism
-// []     **** Compatible with ARDUINO: 1.00 ****
-// []
-// [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
-
 #include <Wire.h>
 
 // -----------------    Library Includes    ------------------------
@@ -348,11 +311,9 @@ void printBatteryLevel()
     // Keep the current battery level, to optimize display time
     lastBattLevel = battLevel;
 
-    // TODO RESTORE
-    /*
     // Print Battery Label
     lcd.setCursor( 0, 0 );
-    lcd.print( BATTERY_LABEL );  */
+    lcd.print( BATTERY_LABEL );
 
     // Print Battery Value
     String battLevelValue = "X";
@@ -384,8 +345,10 @@ void processPhotoCell()
 {   
     readPhotoCellAnalog();
    
+    if ( photoCellLevel == 0 ) // Error - CdS is 0 only when sensor is not working
+        lcdBackLight = DEFAULT_LCD_BACKLIGHT; // Default
     // Determine new LCD Back Light level (1..8, 1 is very dim .. 8 is very bright)
-    if ( photoCellLevel < PHOTOCELL_LEVEL1 )
+    else if ( photoCellLevel < PHOTOCELL_LEVEL1 )
         lcdBackLight = 1; // Very dim
     else if ( photoCellLevel < PHOTOCELL_LEVEL2 )
         lcdBackLight = 2;
@@ -440,7 +403,7 @@ void readGearPositionAnalog()
     float currentGearPositionVolts = 5.0f * GEAR_VOLT_DIVIDER * ( value / 1024.0f );    // read the input pin for Gear Position
     // Constrain the input reading, to reduce errors
     currentGearPositionVolts = constrain( currentGearPositionVolts, 0.01f, 5.0f );
-
+    
     if ( abs( currentGearPositionVolts - gearLevelRunAvg.getAverage() ) > 0.5f ) // big change, probably a real gear shift
     {
         gearLevelRunAvg.trimToValue( currentGearPositionVolts );
@@ -458,11 +421,7 @@ void readGearPositionAnalog()
     
     gearReadError = false; // Clear read error - we made it here
 }
-
-
-// Reference voltage - used to fixed an issue gear position voltage differences created by Arduino for some unknown reason (probably heat)
-//   e.g. When the motorcycle is cold 1st gear is 1.35V, but when it is hot (82F+) 1st gear is 0.95V. Also N is 5.0V C cold, and 4.55 @82F
-float vref = 0;
+// []     0.44 -   4/21/2012 + Restored VREF self learning mechanism
 
 // ----------------------------------------------------------------------------------------------------
 /// Determins the current gear from the gear position volts
@@ -471,20 +430,20 @@ void determineCurrentGear()
 {
      short lastTransientGear = transientGear;
 
-     // Calculate fixed gear position volts - take vref into consideration
-     float fixedGearPositionVolts = gearPositionVolts + vrefRunAvg.getAverage();
+     // Calculate fixed gear position volts
+     float fixedGearPositionVolts = gearPositionVolts;
      
-     if ( IsBetween( fixedGearPositionVolts,  GEAR1_FROM_VOLTS, GEAR1_TO_VOLTS ) )
+     if ( IsBetween( fixedGearPositionVolts,  GEAR1_FROM_VOLTS, GEAR2_FROM_VOLTS ) )
          transientGear = 1;
-     else if ( IsBetween( fixedGearPositionVolts, GEAR2_FROM_VOLTS, GEAR2_TO_VOLTS) )
+     else if ( IsBetween( fixedGearPositionVolts, GEAR2_FROM_VOLTS, GEAR3_FROM_VOLTS) )
          transientGear = 2;
-     else if ( IsBetween( fixedGearPositionVolts , GEAR3_FROM_VOLTS, GEAR3_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts , GEAR3_FROM_VOLTS, GEAR4_FROM_VOLTS ) )
          transientGear = 3;
-     else if ( IsBetween( fixedGearPositionVolts, GEAR4_FROM_VOLTS, GEAR4_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts, GEAR4_FROM_VOLTS, GEAR5_FROM_VOLTS ) )
          transientGear = 4;
-     else if ( IsBetween( fixedGearPositionVolts, GEAR5_FROM_VOLTS, GEAR5_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts, GEAR5_FROM_VOLTS, GEAR6_FROM_VOLTS ) )
          transientGear = 5;
-     else if ( IsBetween( fixedGearPositionVolts, GEAR6_FROM_VOLTS, GEAR6_TO_VOLTS ) )
+     else if ( IsBetween( fixedGearPositionVolts, GEAR6_FROM_VOLTS, GEARN_FROM_VOLTS ) )
          transientGear = 6;
      else if ( IsBetween( fixedGearPositionVolts, GEARN_FROM_VOLTS, GEARN_TO_VOLTS ) )
          transientGear = GEAR_NEUTRAL;
@@ -506,13 +465,6 @@ void determineCurrentGear()
          {
              // Make transient gear change a stable gear change
              gear = transientGear;
-             
-             if ( gear == 1 && battLevel > 9 and gearPositionVolts > 0.9f )
-             {
-                 // Recalc vref based on 1st gear readings
-                 vref = GEAR1_DEFAULT - gearPositionVolts;
-                 vrefRunAvg.addValue( vref );
-             }
 
              transientGear = GEAR_ERROR;
          }
@@ -528,19 +480,10 @@ void printGearPosition()
     #ifdef DEBUG_PRINT_GEARVOLTS
 
     char buffer[6];
-
     lcd.setCursor( 0, 6 );
     dtostrf(gearPositionVolts, 4, 2, buffer );
     lcd.print( buffer );
-    
-    lcd.setCursor( 0, 0 );
-    float vrefAvg = vrefRunAvg.getAverage();
-    dtostrf(vrefAvg, 4, 2, buffer );     
-    lcd.print( buffer );
-    lcd.print( "V" );
-    if ( vrefAvg >= 0.0f )
-        lcd.print( " " );
-    
+        
     #endif
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -795,7 +738,7 @@ void printTemperature()
         }
     }
     
-    lcd.setCursor( 1, 9 );
+    lcd.setCursor( 0,  9 );
     lcd.print( temperatureValue );
 
     // -- DEBUG OnBoard temperature
@@ -803,7 +746,7 @@ void printTemperature()
     dtostrf(onBoardTemperature, 6, 1, formattedTemperature );
     temperatureValue = formattedTemperature;
     temperatureValue += "*";
-    lcd.setCursor( 0, 9 );
+    lcd.setCursor( 1, 9 );
     lcd.print( temperatureValue );
 }
 /// ------------------------------------------------------------
@@ -1079,12 +1022,13 @@ void printStat()
         Serial.println( "N" );
     else
         Serial.println( gear );
-    Serial.print( F( "GearV=" ) ); Serial.println( gearPositionVolts );
+    Serial.print( F( "GearV=" ) ); 
+    Serial.println( gearPositionVolts );
     Serial.print( F( "Batt=" ) ); Serial.println( battLevel );    
-    Serial.print( F( "LCD=" ) ); Serial.println( lcdInitialized ) ;
+    Serial.print( F( "CdS=" ) ); Serial.println( photoCellLevel );
+    Serial.print( F( "LCD=" ) ); Serial.println( lcdInitialized ? "Y" : "N" ) ;
     Serial.print( F( "LCD BL=" ) ); Serial.println( lcdBackLight );
     Serial.print( F( "LCD CT=" ) ); Serial.println( lcdContrast );
-    Serial.print( F( "CdS=" ) ); Serial.println( photoCellLevel );
     Serial.println( F( "------------------" ) ); 
     // Important Note: The serial buffer is limited to 128 bytes. 
     //       Keep it short, or an overflow will occur (currupted memory/hang up)

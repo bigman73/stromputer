@@ -33,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "1.02"
+#define VERSION "1.03"
 
 // []
 // []
@@ -70,7 +70,8 @@
 // []     0.44 -   4/21/2012 + Restored VREF self learning mechanism
 // []     1.00 -   5/20/2012 + Functional, no major issues
 // []     1.02 -   8/11/2012 + Fixed gear voltage for 5th and 6h gear, larger gear and battery window sizes
-// []     **** Compatible with ARDUINO: 1.00 ****
+// []     1.03 -   8/26/2012 + Fixed gear voltage for 1st and 2nd gears
+// []     **** Compatible with ARDUINO: 1.01 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
@@ -139,7 +140,7 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 #define GEAR1_DEFAULT    1.33f
 
 #define GEAR1_FROM_VOLTS 0.00f
-#define GEAR2_FROM_VOLTS 1.55f
+#define GEAR2_FROM_VOLTS 1.65f
 #define GEAR3_FROM_VOLTS 2.20f
 #define GEAR4_FROM_VOLTS 2.90f
 #define GEAR5_FROM_VOLTS 3.65f

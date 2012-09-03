@@ -1,4 +1,4 @@
-#Building Instructions for Stromputer V1
+= *Building Instructions for Stromputer V1* =
 
 = Introduction =
 

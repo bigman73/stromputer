@@ -1,0 +1,11 @@
+= *Building Instructions for Stromputer V2* =
+
+= Introduction =
+
+Stromputer V2 will be an improved design (i.e. evolution, not re-design) of Stromputer V1.
+It focuses on the following factors:
+1. Reduced cost
+2. Simpler design, less components
+3. Smaller form factor
+
+*TODO*

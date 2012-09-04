@@ -11,7 +11,7 @@ Stromputer V1 (As of 9/3/2012) is a fully functional prototype that process and 
   * Ambient temperature (in F or C, 0.1 degree accuracy)
 
 
-Stromputer is composed of two main components:
+Stromputer is composed of two main modules:
   # Brain
     # 10-25V -> 9V DC voltage regulator
     # Arduino Duemilanove
@@ -24,3 +24,9 @@ Stromputer is composed of two main components:
 The components communicate between them using the I2C protocol, over 2 LAN wires (RJ-45)
 
 = Details =
+
+== Components ==
+
+=== Brain Module ===
+
+=== Display Module ===

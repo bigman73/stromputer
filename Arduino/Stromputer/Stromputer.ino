@@ -7,7 +7,7 @@
 // []	  4. LED display of gear position (one led for each gear 1-6, in different colors, N will be blinking on 1)
 // []	  5. [Future] Accurate display of the fuel level (in percentage)
 // []     6. [Future] Show Fuel consumption - MPG or KM/L, TBD: need to tap into motorcycle's speed sensor (PWM)
-// []	  7. [Future] Fix the OEM V-Strom Fuel Gauge to become linear
+// []	  7. [Future] Fix the OEM V-Strom Fuel Gauge to become linea
 // []     License: GPL V3
 /*
     Stromputer - Enhanced display for Suzuki V-Strom Motorcycles (DL-650, DL-1000, years 2004-2011)
@@ -106,7 +106,7 @@ DallasTemperature DS18B20Sensor( &oneWire );
 void setup() 
 { 
     // Setup Serial connection
-    Serial.begin( SERIAL_SPEED );
+    Serial.begin( SERIAL_SPEED_BAUD );
     Serial.print( MSG_FIRMWARE ); Serial.println( VERSION );
 
     onBoardLed.on();    
@@ -376,7 +376,7 @@ void processPhotoCell()
                   
         forceLedUpdate = true; // Force update of LEDs
          
-        lcd.setCursor( 1, 9 );
+        lcd.setCursor( 0, 4 );
         lcd.print( lcdBackLight );   
 
         lcd.setBacklight( lcdBackLight );

@@ -70,7 +70,7 @@
 // []     0.44 -   4/21/2012 + Restored VREF self learning mechanism
 // []     1.00 -   5/20/2012 + Functional, no major issues
 // []     1.02 -   8/11/2012 + Fixed gear voltage for 5th and 6h gear, larger gear and battery window sizes
-// []     1.03 -   8/26/2012 + Fixed gear voltage for 1st and 2nd gears
+// []     1.03 -   9/16/2012 + Fixed gear voltage
 // []     **** Compatible with ARDUINO: 1.01 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -89,7 +89,7 @@
 // Temperature mode - F or C
 #define DEFAULT_TEMPERATURE_MODE 'F'
 
-#define SERIAL_SPEED 38400
+#define SERIAL_SPEED_BAUD 38400
 
 // ------------------------- LCD -------------------------------------------
 #define LCD_ROWS 2
@@ -144,17 +144,9 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 #define GEAR3_FROM_VOLTS 2.20f
 #define GEAR4_FROM_VOLTS 2.90f
 #define GEAR5_FROM_VOLTS 3.65f
-#define GEAR6_FROM_VOLTS 4.20f
+#define GEAR6_FROM_VOLTS 4.30f
 #define GEARN_FROM_VOLTS 4.70f
 #define GEARN_TO_VOLTS   5.50f
-
-
-// Gear Voltage Level Measurements
-//  DATE        ARDUINO_TEMP  ADJ_FACTOR   F/W    1       N      2             3       4      5      6
-//  3/18/2012    82.5F        N/A          0.32   1.35    4.9    ?1.90-2.00?   2.50    3.04   4.05   4.5
-//  3/18/2012    71.8F        N/A          0.32   1.35    4.95   1.7           2.50    3.20   4.05   4.45
-
-// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 #define GEAR_NEUTRAL 0
 #define GEAR_ERROR -1
@@ -288,7 +280,7 @@ bool isForceRefreshTemp = true;
 
 #define BATT_WINDOW_SIZE 8
 
-#define GEAR_WINDOW_SIZE 20
+#define GEAR_WINDOW_SIZE 12
 
 RunningAverage battRunAvg(BATT_WINDOW_SIZE); 
 

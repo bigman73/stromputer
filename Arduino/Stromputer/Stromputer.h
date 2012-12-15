@@ -33,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "1.03"
+#define VERSION "1.04"
 
 // []
 // []
@@ -71,6 +71,7 @@
 // []     1.00 -   5/20/2012 + Functional, no major issues
 // []     1.02 -   8/11/2012 + Fixed gear voltage for 5th and 6h gear, larger gear and battery window sizes
 // []     1.03 -   9/16/2012 + Fixed gear voltage
+// []     1.04 -   12/15/2012 + Fine tuned LED factors
 // []     **** Compatible with ARDUINO: 1.01 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -98,7 +99,7 @@
 #define LCD_I2C_NHD_SCROLL_LEFT 0x55
 #define LCD_I2C_NHD_SCROLL_RIGHT 0x56
 
-#define DEFAULT_LCD_BACKLIGHT 4
+#define DEFAULT_LCD_BACKLIGHT 2
 
 byte lcdBackLight = DEFAULT_LCD_BACKLIGHT; // LCD back light (brightness)
 byte lastLcdBackLight = DEFAULT_LCD_BACKLIGHT; // Ranges in NHD LCD from 1..8 (Very Dim..Very Bright)
@@ -193,7 +194,7 @@ bool forceLedUpdate = false;
 LED onBoardLed = LED();
 
 // --------------------------------------------------------------------------
-
+                                                                                                                                                            
 // --- Ethernet Cable #2 ( 'Gray' sheath, left ethernet )
 //
 //   Wire Color   |   Description
@@ -312,7 +313,7 @@ RunningAverage gearLevelRunAvg(GEAR_WINDOW_SIZE);
 // UI Labels
 #define GEAR_LABEL         "Gear "
 #define TEMPERATURE_LABEL  "Temp  "
-#define BATTERY_LABEL      "Batt  "
+#define BATTERY_LABEL      "Batt"
 #define Welcome1_Line1     "Stromputer-DL650"
 #define Welcome1_Line2     "F/W Ver="
 

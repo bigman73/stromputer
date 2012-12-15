@@ -314,7 +314,7 @@ void printBatteryLevel()
     // Print Battery Label
     lcd.setCursor( 0, 0 );
     lcd.print( BATTERY_LABEL );
-
+    
     // Print Battery Value
     String battLevelValue = "X";
     
@@ -376,11 +376,11 @@ void processPhotoCell()
                   
         forceLedUpdate = true; // Force update of LEDs
          
-        lcd.setCursor( 0, 4 );
-        lcd.print( lcdBackLight );   
-
         lcd.setBacklight( lcdBackLight );
-    }      
+    }    
+  
+    lcd.setCursor( 0, 4 );
+    lcd.print( lcdBackLight );   
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -550,18 +550,29 @@ void updateGearLEDs()
     // Update each gear led, only if not in error mode
     if ( gear != GEAR_ERROR )
     {
-        byte factor;
-        if ( lcdBackLight < 4 )
-            // Night
-            factor = 1;
-        else
-            // Day
-            factor = 3;
+        byte greenFactor;
+        byte yellowFactor;
+        byte whiteFactor;
+        byte blueFactor;
+        if ( lcdBackLight < 4 ) {
+            // Night time - dimmer
+            greenFactor = 1;
+            yellowFactor = 2;
+            whiteFactor = 2;
+            blueFactor = 2;
+        }
+        else {
+            // Day time - brighter
+            greenFactor = 3;
+            yellowFactor = 12;
+            whiteFactor = 21;
+            blueFactor = 18;
+        }
         
-        ledBrightnessGreen = 1 + lcdBackLight * factor; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
-        ledBrightnessYellow = 1 + lcdBackLight * factor * 4; // PWM 0..255 : 0%-100%
-        ledBrightnessWhite = 75 + lcdBackLight * factor * 7; // PWM 0..255 : 0%-100%
-        ledBrightnessBlue = 1 + lcdBackLight * factor * 6; // PWM 0..255 : 0%-100%
+        ledBrightnessGreen = 1 + lcdBackLight * greenFactor; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
+        ledBrightnessYellow = 1 + lcdBackLight * yellowFactor; // PWM 0..255 : 0%-100%
+        ledBrightnessWhite = 75 + lcdBackLight * whiteFactor; // PWM 0..255 : 0%-100%
+        ledBrightnessBlue = 1 + lcdBackLight * blueFactor; // PWM 0..255 : 0%-100%
       
          // Do not handle N gear, the ISR will take care of it
         if ( gear != GEAR_NEUTRAL )

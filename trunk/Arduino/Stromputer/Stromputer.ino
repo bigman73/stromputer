@@ -7,7 +7,7 @@
 // []	  4. LED display of gear position (one led for each gear 1-6, in different colors, N will be blinking on 1)
 // []	  5. [Future] Accurate display of the fuel level (in percentage)
 // []     6. [Future] Show Fuel consumption - MPG or KM/L, TBD: need to tap into motorcycle's speed sensor (PWM)
-// []	  7. [Future] Fix the OEM V-Strom Fuel Gauge to become linea
+// []	  7. [Future] Fix the OEM V-Strom Fuel Gauge to become linear
 // []     License: GPL V3
 /*
     Stromputer - Enhanced display for Suzuki V-Strom Motorcycles (DL-650, DL-1000, years 2004-2011)
@@ -113,7 +113,6 @@ TimedAction lcdDisplayTimedAction = TimedAction( 0, LCD_DISPLAY_LOOP_TIMED_INTER
 // Timed action for Serial Input
 TimedAction serialInputTimedAction = TimedAction( 0, SERIALINPUT_TIMED_INTERVAL, processSerialInput );
 
-
 OneWire oneWire( DIGITALPIN_DS18B20 );
 DallasTemperature DS18B20Sensor( &oneWire ); 
 
@@ -140,10 +139,12 @@ void setup()
 
     showWelcome();
    
+#ifdef USE_DS1631   
     if ( !initializeDS1631() )
     {
         Serial.println( ERR_DS1631_INIT_FAILED );
     }
+#endif    
     	
     // set Timer1
     Timer1.initialize( TIMER1_RESOLUTION );
@@ -268,9 +269,9 @@ void processBatteryLevel()
 {   
     readBatteryLevelAnalog();
     
-    // When 'live' on the motorcycle, there is a 0.9V difference between what Arduino samples and what a volt meter samples.
+    // When 'live' on the motorcycle, there is a difference between what Arduino samples and what a volt meter samples.
     // TODO: Figure out the difference, probably due to a diode somewhere
-    // As a temporary workaround, 0.9V are added as a constant
+    // As a temporary workaround, a constant is added
     if ( battLevel > 1.5f )
         battLevel += 0.8f;
     
@@ -329,11 +330,10 @@ void printBatteryLevel()
     lastBattLevel = battLevel;
 
     // Print Battery Label
-    lcd.setCursor( 0, 0 );
-    lcd.print( BATTERY_LABEL );
+    lcd_print_at(LCD_ROW_BATT_LABEL, LCD_COL_BATT_LABEL, BATTERY_LABEL );  
     
     // Print Battery Value
-    String battLevelValue = "X";
+    String battLevelValue = NOTAVAIL;
     
     if ( battReadError )
     {
@@ -347,11 +347,10 @@ void printBatteryLevel()
         battLevelValue = formattedBattLevel;
 
         // Add volts unit
-        battLevelValue += "V";
+        battLevelValue += UNIT_VOLT;
     }
       
-    lcd.setCursor(1,0);   
-    lcd.print( battLevelValue );
+    lcd_print_at(LCD_ROW_BATT_VALUE, LCD_COL_BATT_VALUE, battLevelValue );  
 }
 
 /// --------------------------------------------------------------------------
@@ -396,8 +395,7 @@ void processPhotoCell()
         lcd.setBacklight( lcdBackLight );
     }    
   
-    lcd.setCursor( 0, 4 );
-    lcd.print( lcdBackLight );   
+    lcd_print_at(LCD_ROW_BACK_LIGHT, LCD_COL_BACK_LIGHT, lcdBackLight );  
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -497,9 +495,8 @@ void printGearPosition()
     #ifdef DEBUG_PRINT_GEARVOLTS
 
     char buffer[6];
-    lcd.setCursor( 0, 6 );
     dtostrf(gearPositionVolts, 4, 2, buffer );
-    lcd.print( buffer );
+    lcd_print_at(LCD_ROW_GEARVOLTS, LCD_COL_GEARVOLTS, buffer );  
         
     #endif
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -522,8 +519,9 @@ void printGearPosition()
         
     // Print Gear Position Label
     #ifndef DEBUG_PRINT_GEARVOLTS
-    lcd.setCursor( 0, 6 );
-    lcd.print( GEAR_LABEL );      
+
+    lcd_print_at(LCD_ROW_GEARLABEL, LCD_COL_GEARLABEL, GEAR_LABEL );  
+    
     #endif
     
     // Print Gear Position Value
@@ -545,8 +543,7 @@ void printGearPosition()
         gearValue.concat( "= " );
     }
 
-    lcd.setCursor(1,6);
-    lcd.print( gearValue );   
+    lcd_print_at(LCD_ROW_GEAR, LCD_COL_GEAR, gearValue );  
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -625,6 +622,7 @@ void processTemperature()
 {
     readTemperatureDS18B20();
 
+#ifdef USE_DS1631
     readTemperatureDS1631();
        
     // Workaround to a problem with DS1631: From time to time, the IC goes nuts and starts returning odd readings (TODO: Check if related to pull up resistor values, or breadboard, or the generic IC socket
@@ -643,6 +641,7 @@ void processTemperature()
             onBoardTemperatureReadError = true;
         }
     }
+#endif    
 
     printTemperature(); 
   
@@ -676,6 +675,7 @@ void readTemperatureDS18B20( )
 /// ----------------------------------------------------------------------------------------------------
 /// Reads the current temperature from the I2C DS1631 Thermometer 
 /// ----------------------------------------------------------------------------------------------------
+#ifdef USE_DS1631
 void readTemperatureDS1631()
 {   
     onBoardTemperatureReadError = true; // Assume read had errors, by default
@@ -709,6 +709,7 @@ void readTemperatureDS1631()
     
     onBoardTemperatureReadError = false; // Clear read error - we made it here
 }
+#endif
 
 /// ----------------------------------------------------------------------------------------------------
 /// Print the current temperature (only if it has been a changed)
@@ -732,9 +733,9 @@ void printTemperature()
     lastTemperature = ds18b20Temperature;
 
     // Print temperature label
-    // TODO: Restore in the future
-//    lcd.setCursor( 0, 11 );
-//    lcd.print( TEMPERATURE_LABEL );     
+#ifndef USE_DS1631
+    lcd_print_at(LCD_ROW_TEMP_LABEL, LCD_COL_TEMP_LABEL, TEMPERATURE_LABEL );       
+#endif    
 
     // Print temperature value
     String temperatureValue;
@@ -766,16 +767,16 @@ void printTemperature()
         }
     }
     
-    lcd.setCursor( 0,  9 );
-    lcd.print( temperatureValue );
+    lcd_print_at(LCD_ROW_TEMP_VALUE, LCD_COL_TEMP_VALUE, temperatureValue );  
 
+#ifdef USE_DS1631
     // -- DEBUG OnBoard temperature
     char formattedTemperature[7]; // [-]DDD.D + NULL => Maximum 7 characters (NULL included)
     dtostrf(onBoardTemperature, 6, 1, formattedTemperature );
-    temperatureValue = formattedTemperature;
-    temperatureValue += "*";
-    lcd.setCursor( 1, 9 );
-    lcd.print( temperatureValue );
+    String onboardTemperatureValue = formattedTemperature;
+    onboardTemperatureValue += "*";
+    lcd_print_at(LCD_ROW_OBTEMP_VALUE, LCD_COL_OBTEMP_VALUE, onboardTemperatureValue );  
+#endif    
 }
 /// ------------------------------------------------------------
 /// Show all gear LEDs
@@ -938,12 +939,9 @@ void printWelcomeScreen( String line1, String line2, int showDelay, int scrollDe
 
     lcd.clear();
     
-    // Print line 1
-    lcd.setCursor( 0, 0 );
-    lcd.print( line1 );       
-    // Print line 2
-    lcd.setCursor( 1,0 );
-    lcd.print(line2 );
+    // Print welcome lines
+    lcd_print_at( 0, 0, line1 );  
+    lcd_print_at( 1, 0, line2 );  
 
     delay( showDelay );
 
@@ -1043,6 +1041,7 @@ void processSerialInput()
 /// ----------------------------------------------------------------------------------------------------
 void printStat()
 {
+#ifdef USE_DS1631
     Serial.print( F( "Tob=" ) );
     if ( onBoardTemperatureReadError )
       Serial.println( F( "ERROR" ) );
@@ -1051,6 +1050,7 @@ void printStat()
       Serial.print( onBoardTemperature, 2 );
       Serial.println( configuration.temperatureMode  );
     }
+#endif    
 
     Serial.print( F( "T=" ) );
     if ( temperatureReadError )
@@ -1099,12 +1099,16 @@ void handleSetCfg( String arg1, String arg2 )
                 if ( tempMode == 'F' )
                 {
                     lastTemperature = DallasTemperature::toFahrenheit( ds18b20Temperature ); 
+#ifdef USE_DS1631
                     lastOnBoardTemperature = DallasTemperature::toFahrenheit( onBoardTemperature ); 
+#endif                    
                 }
                 else
                 {
                     lastTemperature = DallasTemperature::toCelsius( ds18b20Temperature ); 
+#ifdef USE_DS1631
                     lastOnBoardTemperature = DallasTemperature::toCelsius( onBoardTemperature );                    
+#endif                    
                 }
                 
                 writeConfiguration();

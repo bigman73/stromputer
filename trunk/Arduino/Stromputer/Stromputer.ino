@@ -38,10 +38,24 @@
 
 #include <Wire.h>
 
+// ==> Select your LCD type here: Only ONE define should be active from the LCD_TYPE_* defines
+#define LCD_TYPE_NHD 1
+// #define LCD_TYPE_LIQUIDCRYSTAL 1
+
 // -----------------    Library Includes    ------------------------
-// Include 3rd Party library - LCD I2C NHD
-// http://www.arduino.cc/playground/Code/LCDi2c
-#include <LCDi2cNHD.h>                    
+#ifdef LCD_TYPE_NHD
+
+  // Include 3rd Party library - LCD I2C NHD
+  // http://www.arduino.cc/playground/Code/LCDi2c
+  #include <LCDi2cNHD.h>                    
+#elif LCD_TYPE_LIQUIDCRYSTAL
+
+  // Include 3rd Party library - LCD Crystal I2C 
+  #include <LCD.h>
+  #include <LiquidCrystal_I2C.h>                    
+
+#endif
+
 
 // Include 3rd Party library - Timed Actions (Modified by Yuval Naveh)
 // http://www.arduino.cc/playground/Code/TimedAction
@@ -96,8 +110,8 @@ TimedAction lcdDisplayTimedAction = TimedAction( 0, LCD_DISPLAY_LOOP_TIMED_INTER
 // Timed action for Serial Input
 TimedAction serialInputTimedAction = TimedAction( 0, SERIALINPUT_TIMED_INTERVAL, processSerialInput );
 
-#define DS18B20_PIN 4
-OneWire oneWire( DS18B20_PIN );
+
+OneWire oneWire( DIGITALPIN_DS18B20 );
 DallasTemperature DS18B20Sensor( &oneWire ); 
 
 /// --------------------------------------------------------------------------
@@ -812,11 +826,13 @@ void testEachGearLED()
 }
 
 /// --------------------------------------------------------------------------
-/// Initialize the NHD LCD (I2C IC)
+/// Initialize the LCD (I2C IC)
 /// --------------------------------------------------------------------------
 bool initializeLCD()
 {   
     Serial.println( MSG_LCD_INIT_BEGIN );
+
+#ifdef LCD_TYPE_NHD
     // Initialize the display, clears the display
     if ( !lcd.init() )
     {
@@ -826,6 +842,13 @@ bool initializeLCD()
     // Set initial LCD backlight & contrast
     lcd.setBacklight( lcdBackLight );
     lcd.setContrast( lcdContrast );
+    
+#elif LCD_TYPE_LIQUIDCRYSTAL
+    
+    lcd.begin(16,2);               // initialize the lcd 
+    lcd.clear();    
+    
+#endif
 
     Serial.println( MSG_LCD_INIT_END );
     lcdInitialized = true;
@@ -920,15 +943,21 @@ void printWelcomeScreen( String line1, String line2, int showDelay, int scrollDe
 
     delay( showDelay );
 
+#ifdef LCD_TYPE_NHD
     // Scroll Left or Right, based on the scrollDirection argument
     int i2cScrollCommand = ( scrollDirection == DIRECTION_LEFT ) ? LCD_I2C_NHD_SCROLL_LEFT : LCD_I2C_NHD_SCROLL_RIGHT;
     
     // Shift screen right
     for ( int i = 0; i < LCD_COLS; i++ )
-    {    
+    {          
         lcd.command( i2cScrollCommand );
         delay( scrollDelay );
     }
+#elif LCD_TYPE_LIQUIDCRYSTAL
+
+    // TODO: Use LCD::scrollDisplayLeft()
+
+#endif    
     
     lcd.clear();
     

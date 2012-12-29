@@ -93,6 +93,7 @@
 #define SERIAL_SPEED_BAUD 38400
 
 // ------------------------- LCD -------------------------------------------
+
 #define LCD_ROWS 2
 #define LCD_COLS 16
 #define LCD_I2C_ADDRESS 0x50
@@ -108,8 +109,17 @@ byte lcdContrast = 50; // 0..50 (no contrast .. high contrast)
 
 bool lcdInitialized = false;
 
-// Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
-LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
+#ifdef LCD_TYPE_NHD
+  
+  // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
+  LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
+
+#elif LCD_TYPE_LIQUIDCRYSTAL
+
+  // Create the LCD controller instance for YwRobot/IIC Serial 1602
+  LiquidCrystal_I2C lcd(0x27);
+
+#endif
 
 // --------------------------------------------------------------------------
 
@@ -161,6 +171,8 @@ LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 #define ANALOGPIN_GEAR_POSITION A3
 // Photocell level (3K-11K:10K voltage divider) is connected to Analog Pin 2
 #define ANALOGPIN_PHOTCELL A2
+
+#define DIGITALPIN_DS18B20 4
 
 // --- Ethernet Cable #1 ( 'Blue' sheath, right ethernet port )
 //
@@ -240,7 +252,6 @@ long transientGearStartMillis = 0;
 short transientGear = GEAR_ERROR;
 short lastGearLCD = -2;          // Force initial update
 short lastGearLED = -2;       // Force initial update
-float gearVolts[] = { 5, 4.5, 4.8, 4.3 };
 bool gearReadError = false;
 float gearPositionVolts = 0;
 

@@ -88,6 +88,9 @@
 // Comment in/out to enable/disable printing the gear volts
 #define DEBUG_PRINT_GEARVOLTS 1
 
+// DS1631 - OnBoard temperature sensor (was used in Stromputer V1)
+// #define USE_DS1631 1
+
 // Temperature mode - F or C
 #define DEFAULT_TEMPERATURE_MODE 'F'
 
@@ -99,6 +102,10 @@
 #define LCD_COLS 16
 
 #define DEFAULT_LCD_BACKLIGHT 2
+
+#define lcd_print_at( row, col, text ) \
+   lcd.setCursor(row, col); \
+   lcd.print( text );
 
 byte lcdBackLight = DEFAULT_LCD_BACKLIGHT; // LCD back light (brightness)
 byte lastLcdBackLight = DEFAULT_LCD_BACKLIGHT; // Ranges in NHD LCD from 1..8 (Very Dim..Very Bright)
@@ -132,6 +139,27 @@ bool lcdInitialized = false;
   LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCDEXP_EN_PIN, LCDEXP_RW_PIN, LCDEXP_RS_PIN, LCDEXP_D4_PIN, LCDEXP_D5_PIN, LCDEXP_D6_PIN, LCDEXP_D7_PIN);
 
 #endif
+
+
+// -- LCD Label Positions
+#define LCD_ROW_BATT_LABEL    0
+#define LCD_COL_BATT_LABEL    0
+#define LCD_ROW_BATT_VALUE    1
+#define LCD_COL_BATT_VALUE    0
+#define LCD_ROW_BACK_LIGHT    0
+#define LCD_COL_BACK_LIGHT    4
+#define LCD_ROW_GEARVOLTS     0
+#define LCD_COL_GEARVOLTS     6
+#define LCD_ROW_GEARLABEL     0
+#define LCD_COL_GEARLABEL     6
+#define LCD_ROW_GEAR          1
+#define LCD_COL_GEAR          6
+#define LCD_ROW_TEMP_LABEL    0
+#define LCD_COL_TEMP_LABEL   11
+#define LCD_ROW_TEMP_VALUE    0
+#define LCD_COL_TEMP_VALUE    9
+#define LCD_ROW_OBTEMP_VALUE  1
+#define LCD_COL_OBTEMP_VALUE  9
 
 // --------------------------------------------------------------------------
 
@@ -253,11 +281,14 @@ byte dac_value=0;     // output 0..255 -> 0-5V (or VSS..VREF)
 byte all_adc_values[4];   // Input 0..255 -> 0-5V  (or VSS..VREF)
 
 float ds18b20Temperature = 0;  // Farenheit
-float onBoardTemperature = 0;  // Farenheit
 float lastTemperature = -99; // Force initial update
-float lastOnBoardTemperature = -99;
 bool temperatureReadError = false;
-bool onBoardTemperatureReadError = false;
+
+#ifdef USE_DS1631
+  float onBoardTemperature = 0;  // Farenheit
+  float lastOnBoardTemperature = -99;
+  bool onBoardTemperatureReadError = false;
+#endif
 
 short gear = 0;               // 0 = Neutral, or 1-6
 long transientGearStartMillis = 0;
@@ -366,5 +397,8 @@ RunningAverage gearLevelRunAvg(GEAR_WINDOW_SIZE);
 
 #define ERR_LCD_INIT_FAILED      F( ">> ERROR: LCD failed to initialize" )
 #define ERR_DS1631_INIT_FAILED   F( ">> ERROR: DS1631 failed to initialize" )
+
+#define UNIT_VOLT "V"
+#define NOTAVAIL "X"
 
 #endif

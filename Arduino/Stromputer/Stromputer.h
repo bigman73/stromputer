@@ -33,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "1.04"
+#define VERSION "1.05"
 
 // []
 // []
@@ -72,6 +72,7 @@
 // []     1.02 -   8/11/2012 + Fixed gear voltage for 5th and 6h gear, larger gear and battery window sizes
 // []     1.03 -   9/16/2012 + Fixed gear voltage
 // []     1.04 -   12/15/2012 + Fine tuned LED factors
+// []     1.05 -   12/29/2012 + Adaptions to new LCD display module (YwRobot, compatible to LiquidCrystal)
 // []     **** Compatible with ARDUINO: 1.01 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -96,9 +97,6 @@
 
 #define LCD_ROWS 2
 #define LCD_COLS 16
-#define LCD_I2C_ADDRESS 0x50
-#define LCD_I2C_NHD_SCROLL_LEFT 0x55
-#define LCD_I2C_NHD_SCROLL_RIGHT 0x56
 
 #define DEFAULT_LCD_BACKLIGHT 2
 
@@ -106,18 +104,32 @@ byte lcdBackLight = DEFAULT_LCD_BACKLIGHT; // LCD back light (brightness)
 byte lastLcdBackLight = DEFAULT_LCD_BACKLIGHT; // Ranges in NHD LCD from 1..8 (Very Dim..Very Bright)
 byte lcdContrast = 50; // 0..50 (no contrast .. high contrast)
 
-
 bool lcdInitialized = false;
 
 #ifdef LCD_TYPE_NHD
   
+  #define LCD_I2C_ADDRESS 0x50
   // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
   LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 
+  #define LCD_I2C_NHD_SCROLL_LEFT 0x55
+  #define LCD_I2C_NHD_SCROLL_RIGHT 0x56
+
 #elif LCD_TYPE_LIQUIDCRYSTAL
 
+  #define LCD_I2C_ADDRESS 0x27
+  
+  // Define each pin on the LCD (PCF8574t) to a name. These pins are NOT the Arduino pins, they are the LCD (PCF8574t) pins.
+  #define LCDEXP_EN_PIN 2
+  #define LCDEXP_RW_PIN 1
+  #define LCDEXP_RS_PIN 0
+  #define LCDEXP_D4_PIN 4
+  #define LCDEXP_D5_PIN 5
+  #define LCDEXP_D6_PIN 6
+  #define LCDEXP_D7_PIN 7
+  
   // Create the LCD controller instance for YwRobot/IIC Serial 1602
-  LiquidCrystal_I2C lcd(0x27);
+  LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCDEXP_EN_PIN, LCDEXP_RW_PIN, LCDEXP_RS_PIN, LCDEXP_D4_PIN, LCDEXP_D5_PIN, LCDEXP_D6_PIN, LCDEXP_D7_PIN);
 
 #endif
 

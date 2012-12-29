@@ -38,9 +38,12 @@
 
 #include <Wire.h>
 
+// ================================================================================================
 // ==> Select your LCD type here: Only ONE define should be active from the LCD_TYPE_* defines
 #define LCD_TYPE_NHD 1
 // #define LCD_TYPE_LIQUIDCRYSTAL 1
+// ================================================================================================
+
 
 // -----------------    Library Includes    ------------------------
 #ifdef LCD_TYPE_NHD
@@ -845,7 +848,8 @@ bool initializeLCD()
     
 #elif LCD_TYPE_LIQUIDCRYSTAL
     
-    lcd.begin(16,2);               // initialize the lcd 
+    // initialize the lcd 
+    lcd.begin(LCD_ROWS, LCD_COLS);
     lcd.clear();    
     
 #endif

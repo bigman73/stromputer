@@ -851,12 +851,12 @@ bool initializeLCD()
     
 #elif LCD_TYPE_LIQUIDCRYSTAL
     
-    // Turn backlight on
-    lcd.setBacklight();
-    
     // initialize the lcd 
     lcd.begin(LCD_ROWS, LCD_COLS);
     lcd.clear();    
+
+    // Turn backlight on
+    lcd.setBacklight(); 
     
 #endif
 

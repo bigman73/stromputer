@@ -392,7 +392,9 @@ void processPhotoCell()
                   
         forceLedUpdate = true; // Force update of LEDs
          
+#ifdef LCD_TYPE_NHD         
         lcd.setBacklight( lightLevel );
+#endif        
     }    
   
     lcd_print_at(LCD_ROW_BACK_LIGHT, LCD_COL_BACK_LIGHT, lightLevel );  

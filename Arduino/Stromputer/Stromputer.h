@@ -101,14 +101,14 @@
 #define LCD_ROWS 2
 #define LCD_COLS 16
 
-#define DEFAULT_LCD_BACKLIGHT 2
+#define DEFAULT_LIGHT_LEVEL 2
 
 #define lcd_print_at( row, col, text ) \
    lcd.setCursor(row, col); \
    lcd.print( text );
 
-byte lcdBackLight = DEFAULT_LCD_BACKLIGHT; // LCD back light (brightness)
-byte lastLcdBackLight = DEFAULT_LCD_BACKLIGHT; // Ranges in NHD LCD from 1..8 (Very Dim..Very Bright)
+byte lightLevel = DEFAULT_LIGHT_LEVEL; // Light level - controls LCD back light (brightness) and LED brightness, ranges from 1..8 (Very Dim..Very Bright)
+byte lastLightLevel = DEFAULT_LIGHT_LEVEL;
 byte lcdContrast = 50; // 0..50 (no contrast .. high contrast)
 
 bool lcdInitialized = false;

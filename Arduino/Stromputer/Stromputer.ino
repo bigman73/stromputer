@@ -362,40 +362,40 @@ void processPhotoCell()
     readPhotoCellAnalog();
    
     if ( photoCellLevel == 0 ) // Error - CdS is 0 only when sensor is not working
-        lcdBackLight = DEFAULT_LCD_BACKLIGHT; // Default
+        lightLevel = DEFAULT_LIGHT_LEVEL; // Default
     // Determine new LCD Back Light level (1..8, 1 is very dim .. 8 is very bright)
     else if ( photoCellLevel < PHOTOCELL_LEVEL1 )
-        lcdBackLight = 1; // Very dim
+        lightLevel = 1; // Very dim
     else if ( photoCellLevel < PHOTOCELL_LEVEL2 )
-        lcdBackLight = 2;
+        lightLevel = 2;
     else if ( photoCellLevel < PHOTOCELL_LEVEL3 )
-        lcdBackLight = 3;
+        lightLevel = 3;
     else if ( photoCellLevel < PHOTOCELL_LEVEL4 )
-        lcdBackLight = 4;
+        lightLevel = 4;
     else if ( photoCellLevel < PHOTOCELL_LEVEL5 )
-        lcdBackLight = 5;
+        lightLevel = 5;
     else if ( photoCellLevel < PHOTOCELL_LEVEL6 )
-        lcdBackLight = 6;
+        lightLevel = 6;
     else if ( photoCellLevel < PHOTOCELL_LEVEL7 )
-        lcdBackLight = 7;
+        lightLevel = 7;
     else
-        lcdBackLight = 8; // Very bright
+        lightLevel = 8; // Very bright
 
     // Only update the LCD backlight if there is actually a change (to reduce costly I2C traffic)
-    if ( lcdBackLight != lastLcdBackLight )
+    if ( lightLevel != lastLightLevel )
     {       
         // if a large change, use a smoothing function (average) to reduce sharp/large changes
-        if ( abs( lcdBackLight - lastLcdBackLight ) > 1 )
-            lcdBackLight = ( lcdBackLight + lastLcdBackLight ) / 2;
+        if ( abs( lightLevel - lastLightLevel ) > 1 )
+            lightLevel = ( lightLevel + lastLightLevel ) / 2;
             
-        lastLcdBackLight = lcdBackLight;
+        lastLightLevel = lightLevel;
                   
         forceLedUpdate = true; // Force update of LEDs
          
-        lcd.setBacklight( lcdBackLight );
+        lcd.setBacklight( lightLevel );
     }    
   
-    lcd_print_at(LCD_ROW_BACK_LIGHT, LCD_COL_BACK_LIGHT, lcdBackLight );  
+    lcd_print_at(LCD_ROW_BACK_LIGHT, LCD_COL_BACK_LIGHT, lightLevel );  
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -568,7 +568,7 @@ void updateGearLEDs()
         byte yellowFactor;
         byte whiteFactor;
         byte blueFactor;
-        if ( lcdBackLight < 4 ) {
+        if ( lightLevel < 4 ) {
             // Night time - dimmer
             greenFactor = 1;
             yellowFactor = 2;
@@ -583,10 +583,10 @@ void updateGearLEDs()
             blueFactor = 18;
         }
         
-        ledBrightnessGreen = 1 + lcdBackLight * greenFactor; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
-        ledBrightnessYellow = 1 + lcdBackLight * yellowFactor; // PWM 0..255 : 0%-100%
-        ledBrightnessWhite = 75 + lcdBackLight * whiteFactor; // PWM 0..255 : 0%-100%
-        ledBrightnessBlue = 1 + lcdBackLight * blueFactor; // PWM 0..255 : 0%-100%
+        ledBrightnessGreen = 1 + lightLevel * greenFactor; // Note: Green LED (1st Gear LED) is extremely bright even with very small currents/PWM duty cycle
+        ledBrightnessYellow = 1 + lightLevel * yellowFactor; // PWM 0..255 : 0%-100%
+        ledBrightnessWhite = 75 + lightLevel * whiteFactor; // PWM 0..255 : 0%-100%
+        ledBrightnessBlue = 1 + lightLevel * blueFactor; // PWM 0..255 : 0%-100%
       
          // Do not handle N gear, the ISR will take care of it
         if ( gear != GEAR_NEUTRAL )
@@ -844,10 +844,13 @@ bool initializeLCD()
     }
 
     // Set initial LCD backlight & contrast
-    lcd.setBacklight( lcdBackLight );
+    lcd.setBacklight( lightLevel );
     lcd.setContrast( lcdContrast );
     
 #elif LCD_TYPE_LIQUIDCRYSTAL
+    
+    // Turn backlight on
+    lcd.setBacklight();
     
     // initialize the lcd 
     lcd.begin(LCD_ROWS, LCD_COLS);
@@ -1070,8 +1073,8 @@ void printStat()
     Serial.println( gearPositionVolts );
     Serial.print( F( "Batt=" ) ); Serial.println( battLevel );    
     Serial.print( F( "CdS=" ) ); Serial.println( photoCellLevel );
+    Serial.print( F( "Light Level=" ) ); Serial.println( lightLevel );
     Serial.print( F( "LCD=" ) ); Serial.println( lcdInitialized ? "Y" : "N" ) ;
-    Serial.print( F( "LCD BL=" ) ); Serial.println( lcdBackLight );
     Serial.print( F( "LCD CT=" ) ); Serial.println( lcdContrast );
     Serial.println( F( "------------------" ) ); 
     // Important Note: The serial buffer is limited to 128 bytes. 

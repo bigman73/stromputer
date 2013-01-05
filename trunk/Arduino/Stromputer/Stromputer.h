@@ -103,10 +103,6 @@
 
 #define DEFAULT_LIGHT_LEVEL 2
 
-#define lcd_print_at( row, col, text ) \
-   lcd.setCursor(col, row); \
-   lcd.print( text );
-
 byte lightLevel = DEFAULT_LIGHT_LEVEL; // Light level - controls LCD back light (brightness) and LED brightness, ranges from 1..8 (Very Dim..Very Bright)
 byte lastLightLevel = DEFAULT_LIGHT_LEVEL;
 byte lcdContrast = 50; // 0..50 (no contrast .. high contrast)
@@ -115,6 +111,10 @@ bool lcdInitialized = false;
 
 #ifdef LCD_TYPE_NHD
   
+  #define lcd_print_at( row, col, text ) \
+     lcd.setCursor(row, col); \
+     lcd.print( text );
+
   #define LCD_I2C_ADDRESS 0x50
   
   // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
@@ -124,6 +124,11 @@ bool lcdInitialized = false;
   #define LCD_I2C_NHD_SCROLL_RIGHT 0x56
 
 #elif LCD_TYPE_LIQUIDCRYSTAL
+
+  #define lcd_print_at( row, col, text ) \
+     lcd.setCursor(col, row); \
+     lcd.print( text );
+
 
   #define LCD_I2C_ADDRESS 0x27
   #define LCD_BACKLIGHT_PIN 3

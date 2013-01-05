@@ -104,7 +104,7 @@
 #define DEFAULT_LIGHT_LEVEL 2
 
 #define lcd_print_at( row, col, text ) \
-   lcd.setCursor(row, col); \
+   lcd.setCursor(col, row); \
    lcd.print( text );
 
 byte lightLevel = DEFAULT_LIGHT_LEVEL; // Light level - controls LCD back light (brightness) and LED brightness, ranges from 1..8 (Very Dim..Very Bright)
@@ -116,6 +116,7 @@ bool lcdInitialized = false;
 #ifdef LCD_TYPE_NHD
   
   #define LCD_I2C_ADDRESS 0x50
+  
   // Create the LCD controller instance, for NHD-0216B3Z-FL-GBW
   LCDi2cNHD lcd = LCDi2cNHD( LCD_ROWS, LCD_COLS, LCD_I2C_ADDRESS >> 1,0 );
 
@@ -125,6 +126,7 @@ bool lcdInitialized = false;
 #elif LCD_TYPE_LIQUIDCRYSTAL
 
   #define LCD_I2C_ADDRESS 0x27
+  #define LCD_BACKLIGHT_PIN 3
   
   // Define each pin on the LCD (PCF8574t) to a name. These pins are NOT the Arduino pins, they are the LCD (PCF8574t) pins.
   #define LCDEXP_EN_PIN 2

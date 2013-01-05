@@ -40,8 +40,8 @@
 
 // ================================================================================================
 // ==> Select your LCD type here: Only ONE define should be active from the LCD_TYPE_* defines
-#define LCD_TYPE_NHD 1
-// #define LCD_TYPE_LIQUIDCRYSTAL 1
+// #define LCD_TYPE_NHD 1
+#define LCD_TYPE_LIQUIDCRYSTAL 1
 // ================================================================================================
 
 
@@ -853,10 +853,10 @@ bool initializeLCD()
     
     // initialize the lcd 
     lcd.begin(LCD_ROWS, LCD_COLS);
-    lcd.clear();    
 
     // Turn backlight on
-    lcd.setBacklight(); 
+    lcd.setBacklightPin(LCD_BACKLIGHT_PIN,POSITIVE);
+    lcd.setBacklight(HIGH); 
     
 #endif
 

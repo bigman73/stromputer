@@ -33,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "1.05"
+#define VERSION "1.06"
 
 // []
 // []
@@ -73,7 +73,8 @@
 // []     1.03 -   9/16/2012 + Fixed gear voltage
 // []     1.04 -   12/15/2012 + Fine tuned LED factors
 // []     1.05 -   12/29/2012 + Adaptions to new LCD display module (YwRobot, compatible to LiquidCrystal)
-// []     **** Compatible with ARDUINO: 1.01 ****
+// []     1.06 -   1/17/2013 + Restored VCC calculation, instead of hard coded 5.0V (using Internal 1.1V reference), Moved to Arudino 1.0.3
+// []     **** Compatible with ARDUINO: 1.03 ****
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 
@@ -282,6 +283,8 @@ struct config_t
 } configuration;
 
 // Variables
+
+float vcc; // Actual VCC in Volts
 
 // Variables used for PCF8591 IC IO
 byte dac_value=0;     // output 0..255 -> 0-5V (or VSS..VREF)

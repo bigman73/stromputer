@@ -126,6 +126,19 @@ void setup()
     Serial.print( MSG_FIRMWARE ); Serial.println( VERSION );
 
     onBoardLed.on();    
+	
+    // Setup all input pins
+    pinMode(ANALOGPIN_BATT_LEVEL, INPUT);        // Set Battery pin for Input Mode
+    digitalWrite(ANALOGPIN_BATT_LEVEL, LOW);     // Disable pullup on analog pin of battery level
+    pinMode(ANALOGPIN_PHOTCELL, INPUT);          // Set Photocell pin for Input Mode
+    digitalWrite(ANALOGPIN_PHOTCELL, LOW);       // Disable pullup on analog pin of Photo Cell
+    pinMode(ANALOGPIN_GEAR_POSITION, INPUT);     // Set Gear Position pin for Input Mode
+    digitalWrite(ANALOGPIN_GEAR_POSITION, LOW);  // Disable pullup on analog pin of Gear Position
+        
+    analogReference(DEFAULT);   // Use 5V Reference for analogRead (ADC)
+    
+    vcc = readVcc();
+    printVcc();
     
     // Start Temperature interface
     DS18B20Sensor.begin();                   
@@ -210,6 +223,11 @@ void timerISR()
         onBoardLed.toggle();
     }
 
+    if ( timerDivider % 1000 == 1 ) 
+    {
+        vcc = readVcc();
+    }
+    
     // Handle gear LED display at 20Hz (i.e. check every 50 msec)
     if ( timerDivider % 50 == 1 ) 
     {
@@ -227,7 +245,7 @@ void timerISR()
         // Toggle 1st Gear LED On/Off (using PWM) , signaling the rider that the gear is N
         // Note: LED::Toggle() doesn't work well, because it uses digitalWrite instead of analogWrite, thus doesn't use PWM and causes the LED to show with full brightness always
         ledGears[ 0 ].setValue( ledGears[ 0 ].getState() ? 0 : ledBrightnessGreen ); // If last state was true, toggle it to true, and visa versa
-    }    
+    }        
 
     timerDivider++;
 }
@@ -269,11 +287,12 @@ void processBatteryLevel()
 {   
     readBatteryLevelAnalog();
     
+    /*
     // When 'live' on the motorcycle, there is a difference between what Arduino samples and what a volt meter samples.
     // TODO: Figure out the difference, probably due to a diode somewhere
     // As a temporary workaround, a constant is added
     if ( battLevel > 1.5f )
-        battLevel += 0.8f;
+        battLevel += 0.8f;*/
     
     printBatteryLevel();
 }
@@ -285,9 +304,9 @@ void readBatteryLevelAnalog()
 {
     battReadError = true; // Assume read had errors, by default
 
-    int adcValue = analogRead( ANALOGPIN_BATT_LEVEL );    // read the input pin for Battery Level
+    int rawValue = analogRead( ANALOGPIN_BATT_LEVEL );    // read the input pin for Battery Level
     
-    float currentBattLevel = 5.0f * BATT_VOLT_DIVIDER * ( adcValue / 1024.0f );
+    float currentBattLevel = BATT_VOLT_DIVIDER * vcc * ( rawValue / 1024.0f );
     currentBattLevel = constrain( currentBattLevel, 0.01f, 20.0f );
 
     // Trim the battery level average when the switch is turned on for the first time
@@ -381,7 +400,7 @@ void processPhotoCell()
     else
         lightLevel = 8; // Very bright
 
-    // Only update the LCD backlight if there is actually a change (to reduce costly I2C traffic)
+    // Only update the display light level if there is actually a change (to reduce costly I2C traffic)
     if ( lightLevel != lastLightLevel )
     {       
         // if a large change, use a smoothing function (average) to reduce sharp/large changes
@@ -415,9 +434,9 @@ void readGearPositionAnalog()
 {
     gearReadError = true; // Assume read had errors, by default
    
-    int value = analogRead( ANALOGPIN_GEAR_POSITION );
+    int rawValue = analogRead( ANALOGPIN_GEAR_POSITION );
         
-    float currentGearPositionVolts = 5.0f * GEAR_VOLT_DIVIDER * ( value / 1024.0f );    // read the input pin for Gear Position
+    float currentGearPositionVolts = GEAR_VOLT_DIVIDER * vcc * ( rawValue / 1024.0f );    // read the input pin for Gear Position
     // Constrain the input reading, to reduce errors
     currentGearPositionVolts = constrain( currentGearPositionVolts, 0.01f, 5.0f );
     
@@ -1078,6 +1097,7 @@ void printStat()
     Serial.print( F( "Light Level=" ) ); Serial.println( lightLevel );
     Serial.print( F( "LCD=" ) ); Serial.println( lcdInitialized ? "Y" : "N" ) ;
     Serial.print( F( "LCD CT=" ) ); Serial.println( lcdContrast );
+    printVcc();    
     Serial.println( F( "------------------" ) ); 
     // Important Note: The serial buffer is limited to 128 bytes. 
     //       Keep it short, or an overflow will occur (currupted memory/hang up)
@@ -1218,5 +1238,31 @@ void printConfiguration()
     Serial.print( "IsValidConfig (Raw Value): " ); Serial.println( configuration.isValidConfig );
     Serial.print( "IsValidConfig: " ); Serial.println( ( configuration.isValidConfig == 12345 ) ? "Y" : "N" );
     Serial.print( "temperatureMode Mode: " ); Serial.println( configuration.temperatureMode );
+}
+
+
+/// ----------------------------------------------------------------------------------------------------
+/// Calculates the on board VCC, which is needed for accurate ADC readings 
+/// analogRead reads from GND..VCC in 1024 steps
+/// Source: http://hacking.majenko.co.uk/node/57
+/// ----------------------------------------------------------------------------------------------------
+float readVcc() {
+    long result;
+    // Read 1.1V reference against AVcc
+    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+    delay(2); // Wait for Vref to settle
+    ADCSRA |= _BV(ADSC); // Convert
+    while (bit_is_set(ADCSRA,ADSC));
+    result = ADCL;
+    result |= ADCH<<8;
+    result = 1125300L / result; // Back-calculate AVcc in mV
+    
+    return result / 1000.0f;
+}
+
+void printVcc() {
+    Serial.print( "VCC = " );
+    Serial.print( vcc, 3 );
+    Serial.println( "mV" );
 }
 

@@ -10,7 +10,6 @@
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 // []
 // []   Stromputer
-// []     License: GPL V3
 /*
     Stromputer - Enhanced display for Suzuki V-Strom Motorcycles (DL-650, DL-1000, years 2004-2011)
     Copyright (C) 2011 Yuval Naveh

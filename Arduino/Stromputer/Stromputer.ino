@@ -8,7 +8,6 @@
 // []	  5. [Future] Accurate display of the fuel level (in percentage)
 // []     6. [Future] Show Fuel consumption - MPG or KM/L, TBD: need to tap into motorcycle's speed sensor (PWM)
 // []	  7. [Future] Fix the OEM V-Strom Fuel Gauge to become linear
-// []     License: GPL V3
 /*
     Stromputer - Enhanced display for Suzuki V-Strom Motorcycles (DL-650, DL-1000, years 2004-2011)
     Copyright (C) 2011 Yuval Naveh

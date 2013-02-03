@@ -33,64 +33,23 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "1.06"
-
-// []
-// []
-// []   Versions:
-// []     0.07 - Prototype, ADC worksonly with PCF8591
-// []     0.08 - Prototype, ADC works with Arudino Analog or PCF8591
-// []     0.09 - Prototype, add timed actions - Battery and Temperature should not be polled every loop, just once a few seconds
-// []     0.10 - 12/3/2011, Stable Prototype, first version in Google Code/SVN
-// []     0.11 - 12/4/2011, Added gear led logic in software, refactored code to use ISR for main board blink and gear neutral blinking led, changed welcome screen
-// []     0.12 - 12/5/2011, Added direct gear emulation (tactile button)
-// []     0.13 - 12/9/2011, Added gear led boot test. Last version compatible with Arduino 0023 before moving to Arduino 1.0
-// []     0.14 - 12/9/2011, + All LED control was changed to use the LED Library,
-// []                       + Add force LCD update every 15 seconds (workaround to LCD clearing screen from time to time)
-// []                       + Fixed TimedAction to trigger immediately when sketch starts
-// []     0.15 - 12/10/2011, + Changed custom Timer ISR to TimerOne library, Refactored all constants and variables to Stromputer.h header file
-// []     0.16 - 12/10/2011, + Code refactoring, naming conventions
-// []     0.17 - 12/10/2011 + Moved to Arduino 1.0 (.ino), Main loop slowed down to refersh on 4Hz, removed obsolete PCF8591 gear read logic
-// []     0.18 - 12/13/2011 + Add Photo Cell read/Automatic LCD Backlight Adjustment
-// []     0.19 - 12/24/2011 + Fixed forced refresh, lcd back light value now using average (for smoothing), Fixed temperature error handling
-// []     0.20 - 12/25/2011 + LED Dimming, All LED pins changed to PWM
-// []     0.21 - 12/26/2011 + Fixed minor bug - Neutral light was 'jumping' while light has been dimming.
-// []     0.22 - 12/26/2011 + Adjusted real resistor values
-// []     0.23 -   1/8/2012 + Added time action for checking forced LCD refresh, added serial messages when booting, Added initial Serial Input
-// []     0.24 -   1/14/2012 + Added Serial Commands, removed serial debug
-// []     0.25 -   1/14/2012 + Added Non-Volatile EEPROM configuration (remains after power is shut off, read when rebooting)
-// []     0.26 -   1/21/2012 + Fixed I2C Error Handling, more EEPROM configurations
-// []     0.27 -   1/22/2012 + Fixed some bugs - ISR was disabled on each serial processing, MILETONE: Successful 2ND deployment to V-Strom
-// []     0.28 -   1/23/2012 + Fixed transient/fake Neutral
-// []     0.30 -   2/1/2012  + 
-// []     0.31 -   3/10/2012 + Fixed gear voltage ranges (measured on bike)
-// []     0.40 -   3/29/2012 + Fixed ADC measuring error (battery and on-board temperature). VCC is not 5.0V and can change. Internal volt reference (1.1V) is used as a reference
-// []                        + Using RunningAverage library for smoothing reading of input (Battery, Gear, Temperature)
-// []     0.42 -   4/12/2012 + Gear ADC finally fixed - Resistors changed to 499KOhm military spec (low PPM, high precision).
-// []     0.44 -   4/21/2012 + Restored VREF self learning mechanism
-// []     1.00 -   5/20/2012 + Functional, no major issues
-// []     1.02 -   8/11/2012 + Fixed gear voltage for 5th and 6h gear, larger gear and battery window sizes
-// []     1.03 -   9/16/2012 + Fixed gear voltage
-// []     1.04 -   12/15/2012 + Fine tuned LED factors
-// []     1.05 -   12/29/2012 + Adaptions to new LCD display module (YwRobot, compatible to LiquidCrystal)
-// []     1.06 -   1/17/2013 + Restored VCC calculation, instead of hard coded 5.0V (using Internal 1.1V reference), Moved to Arudino 1.0.3
-// []     **** Compatible with ARDUINO: 1.03 ****
-// []
-// [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
-
+#define VERSION "1.07"
 
 // Macro for defining PROGMEM (Flash) Strings
-#define FS( text ) (const char*)F(text)
+//#define FS( text ) (const char*)F(text)
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
 #define SHOW_WELCOME
 
 // Comment in/out to enable/disable printing the gear volts
-#define DEBUG_PRINT_GEARVOLTS 1
+// #define OPT_SHOW_GEARVOLTS
+
+// Comment in/out to enable/disable printing the light level (1..8)
+// #define OPT_SHOW_LIGHT_LEVEL
 
 // DS1631 - OnBoard temperature sensor (was used in Stromputer V1)
-// #define USE_DS1631 1
+// #define OPT_USE_DS1631
 
 // Temperature mode - F or C
 #define DEFAULT_TEMPERATURE_MODE 'F'
@@ -164,10 +123,10 @@ bool lcdInitialized = false;
 #define LCD_COL_GEAR          6
 #define LCD_ROW_TEMP_LABEL    0
 #define LCD_COL_TEMP_LABEL   11
-#define LCD_ROW_TEMP_VALUE    0
-#define LCD_COL_TEMP_VALUE    9
-#define LCD_ROW_OBTEMP_VALUE  1
-#define LCD_COL_OBTEMP_VALUE  9
+#define LCD_ROW_TEMP_VALUE    1
+#define LCD_COL_TEMP_VALUE   10
+#define LCD_ROW_OBTEMP_VALUE  0
+#define LCD_COL_OBTEMP_VALUE 10
 
 // --------------------------------------------------------------------------
 
@@ -294,7 +253,10 @@ float ds18b20Temperature = 0;  // Farenheit
 float lastTemperature = -99; // Force initial update
 bool temperatureReadError = false;
 
-#ifdef USE_DS1631
+#define MIN_VALID_TEMP -55
+
+#ifdef OPT_USE_DS1631
+  bool onBoardTemperatureInitialized = false;
   float onBoardTemperature = 0;  // Farenheit
   float lastOnBoardTemperature = -99;
   bool onBoardTemperatureReadError = false;

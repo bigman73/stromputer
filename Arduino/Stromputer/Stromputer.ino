@@ -36,8 +36,6 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#include <Wire.h>
-
 // ================================================================================================
 // ==> Select your LCD type here: Only ONE define should be active from the LCD_TYPE_* defines
 // #define LCD_TYPE_NHD 1
@@ -59,6 +57,12 @@
 
 #endif
 
+// Include 3rd Party library -Needed for communication with DS1631
+#ifdef OPT_USE_DS1631
+  
+  #include <Wire.h>
+  
+#endif
 
 // Include 3rd Party library - Timed Actions (Modified by Yuval Naveh)
 // http://www.arduino.cc/playground/Code/TimedAction
@@ -80,6 +84,7 @@
 // 1-Wire Support (Dallas Semiconductor Serial Communication Protocol)
 // http://www.pjrc.com/teensy/td_libs_OneWire.html
 #include <OneWire.h>
+
 // Dallas Temperature (i.e. DS18B20) support
 // https://code.google.com/p/dallas-temperature-control-library/
 #include <DallasTemperature.h>
@@ -152,7 +157,7 @@ void setup()
 
     showWelcome();
    
-#ifdef USE_DS1631   
+#ifdef OPT_USE_DS1631   
     if ( !initializeDS1631() )
     {
         Serial.println( ERR_DS1631_INIT_FAILED );
@@ -411,12 +416,14 @@ void processPhotoCell()
                   
         forceLedUpdate = true; // Force update of LEDs
          
-#ifdef LCD_TYPE_NHD         
+#ifdef LCD_TYPE_NHD        
         lcd.setBacklight( lightLevel );
 #endif        
     }    
   
+#ifdef OPT_SHOW_LIGHT_LEVEL
     lcd_print_at(LCD_ROW_BACK_LIGHT, LCD_COL_BACK_LIGHT, lightLevel );  
+#endif    
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -513,7 +520,7 @@ void determineCurrentGear()
 void printGearPosition()
 {    
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    #ifdef DEBUG_PRINT_GEARVOLTS
+    #ifdef OPT_SHOW_GEARVOLTS
 
     char buffer[6];
     dtostrf(gearPositionVolts, 4, 2, buffer );
@@ -539,7 +546,7 @@ void printGearPosition()
     lastGearLCD = gear;
         
     // Print Gear Position Label
-    #ifndef DEBUG_PRINT_GEARVOLTS
+    #ifndef OPT_SHOW_GEARVOLTS
 
     lcd_print_at(LCD_ROW_GEARLABEL, LCD_COL_GEARLABEL, GEAR_LABEL );  
     
@@ -643,7 +650,7 @@ void processTemperature()
 {
     readTemperatureDS18B20();
 
-#ifdef USE_DS1631
+#ifdef OPT_USE_DS1631
     readTemperatureDS1631();
        
     // Workaround to a problem with DS1631: From time to time, the IC goes nuts and starts returning odd readings (TODO: Check if related to pull up resistor values, or breadboard, or the generic IC socket
@@ -696,11 +703,13 @@ void readTemperatureDS18B20( )
 /// ----------------------------------------------------------------------------------------------------
 /// Reads the current temperature from the I2C DS1631 Thermometer 
 /// ----------------------------------------------------------------------------------------------------
-#ifdef USE_DS1631
+#ifdef OPT_USE_DS1631
 void readTemperatureDS1631()
 {   
     onBoardTemperatureReadError = true; // Assume read had errors, by default
-    
+    if (!onBoardTemperatureInitialized)
+      return;
+      
     // READ T° from DS1631
     Wire.beginTransmission( DS1631_I2C_ADDRESS );
     Wire.write((int)( DS1631_I2C_COMMAND_READ_TEMP ));
@@ -754,7 +763,7 @@ void printTemperature()
     lastTemperature = ds18b20Temperature;
 
     // Print temperature label
-#ifndef USE_DS1631
+#ifndef OPT_USE_DS1631
     lcd_print_at(LCD_ROW_TEMP_LABEL, LCD_COL_TEMP_LABEL, TEMPERATURE_LABEL );       
 #endif    
 
@@ -763,9 +772,9 @@ void printTemperature()
 
     if ( temperatureReadError )
     {
-        temperatureValue = " ERR  ";
+        temperatureValue = "  ERR  ";
     }
-    else if ( ds18b20Temperature < -55 )
+    else if ( ds18b20Temperature < MIN_VALID_TEMP )
     {
         // Workaround when there are odd readings on first seconds when temperature sensor is starting up
         temperatureValue = " ----";
@@ -773,8 +782,8 @@ void printTemperature()
     else
     {      
         // format temperature into a fixed .1 format (e.g. 62.5 or 114.4 [too hot to ride! :) ] or -10.7 [too cold to ride! :) ])
-        char formattedTemperature[7]; // [-]DDD.D + NULL => Maximum 7 characters (NULL included)
-        dtostrf(ds18b20Temperature, 6, 1, formattedTemperature );
+        char formattedTemperature[6]; // [-]DD.D + NULL | DDD.D + NULL => Maximum 7 characters (NULL included)
+        dtostrf(ds18b20Temperature, 5, 1, formattedTemperature );
         temperatureValue = formattedTemperature;
         
         // Add temperature mode unit
@@ -790,11 +799,19 @@ void printTemperature()
     
     lcd_print_at(LCD_ROW_TEMP_VALUE, LCD_COL_TEMP_VALUE, temperatureValue );  
 
-#ifdef USE_DS1631
-    // -- DEBUG OnBoard temperature
-    char formattedTemperature[7]; // [-]DDD.D + NULL => Maximum 7 characters (NULL included)
-    dtostrf(onBoardTemperature, 6, 1, formattedTemperature );
-    String onboardTemperatureValue = formattedTemperature;
+#ifdef OPT_USE_DS1631
+    String onboardTemperatureValue;
+    if ( !onBoardTemperatureInitialized || onBoardTemperatureInitialized ) 
+    {
+      onboardTemperatureValue = "  ERR";
+    }
+    else
+    {
+      // -- Show OnBoard temperature
+      char formattedTemperature[6]; // [-]DD.D + NULL | DDD.D + NULL => Maximum 6 characters (NULL included)
+      dtostrf(onBoardTemperature, 5, 1, formattedTemperature );
+      onboardTemperatureValue = formattedTemperature;
+    }
     onboardTemperatureValue += "*";
     lcd_print_at(LCD_ROW_OBTEMP_VALUE, LCD_COL_OBTEMP_VALUE, onboardTemperatureValue );  
 #endif    
@@ -885,65 +902,74 @@ bool initializeLCD()
     return true;
 }
 
+#ifdef OPT_USE_DS1631
 /// --------------------------------------------------------------------------
 /// Initialize the DS 1631 Temperature Sensor (I2C IC)
 /// --------------------------------------------------------------------------
 bool initializeDS1631()
 {
-  Serial.println( MSG_DS1631_INIT_BEGIN );
+    Serial.println( MSG_DS1631_INIT_BEGIN );
   
-   // Stop conversion to be able to modify "Access Config" Register
-  Wire.beginTransmission( DS1631_I2C_ADDRESS );
-  Wire.write((int)( DS1631_I2C_COMMAND_STOP_CONVERT )); // Stop conversion
-  if ( Wire.endTransmission() )
-  {
-    Serial.println( F( ">> Error: Stop Convert command failed" ) );
-    return false; // Error
-  }
+    // Stop conversion to be able to modify "Access Config" Register
+    Wire.beginTransmission( DS1631_I2C_ADDRESS );
+    Wire.write((int)( DS1631_I2C_COMMAND_STOP_CONVERT )); // Stop conversion
+    if ( Wire.endTransmission() )
+    {
+       Serial.println( F( ">> Error: Stop Convert command failed" ) );
+       return false; // Error
+    }
     
-  // READ "Access Config" register
-  Wire.beginTransmission(DS1631_I2C_ADDRESS);
-  Wire.write((int)( DS1631_I2C_COMMAND_ACCESS_CONFIG ));
-  if ( Wire.endTransmission() )
-  {
-      Serial.println( F( ">> Error: Access Config command failed" ) );
-      return false; // Error
-  }
+    // READ "Access Config" register
+    Wire.beginTransmission(DS1631_I2C_ADDRESS);
+    Wire.write((int)( DS1631_I2C_COMMAND_ACCESS_CONFIG ));
+    if ( Wire.endTransmission() )
+    {
+        Serial.println( F( ">> Error: Access Config command failed" ) );
+        return false; // Error
+    }
 
-  Wire.requestFrom( DS1631_I2C_ADDRESS,1 ); // Read 1 byte
-  Wire.available();
-  Wire.read(); // receive a byte (AC), but ignore it, we have no use for it
+    Wire.requestFrom( DS1631_I2C_ADDRESS,1 ); // Read 1 byte
+    Wire.available();
+    int ac = Wire.read(); // receive a byte (AC)
+    if ( ac == -1 )
+    {
+        Serial.println( F( ">> Error: DS1631 initializtion failed" ) );
+        return false; // Error
+    }
     
-  // WRITE into "Access Config" Register
-  Wire.beginTransmission(DS1631_I2C_ADDRESS);
-  Wire.write( DS1631_I2C_COMMAND_ACCESS_CONFIG );
-  Wire.write( DS1631_I2C_CONTROLBYTE_CONT_12BIT ); // Continuous conversion & 12 bits resolution
-  if ( Wire.endTransmission() )
-  {
-      Serial.println( F( ">> Error: Access Continous Control Byte command failed" ) );
-      return false; // Error
-  }
-
-  // START conversion to get T°
-  Wire.beginTransmission(DS1631_I2C_ADDRESS);
-  Wire.write((int) DS1631_I2C_COMMAND_START_CONVERT); // Start Conversion
-  if ( Wire.endTransmission() )
-  {
-      Serial.println( F( ">> Error: Start Convert command failed" ) );
-      return false; // Error
-  }
+    
+    // WRITE into "Access Config" Register
+    Wire.beginTransmission(DS1631_I2C_ADDRESS);
+    Wire.write( DS1631_I2C_COMMAND_ACCESS_CONFIG );
+    Wire.write( DS1631_I2C_CONTROLBYTE_CONT_12BIT ); // Continuous conversion & 12 bits resolution
+    if ( Wire.endTransmission() )
+    {
+        Serial.println( F( ">> Error: Access Continous Control Byte command failed" ) );
+        return false; // Error
+    }
+ 
+    // START conversion to get T°
+    Wire.beginTransmission(DS1631_I2C_ADDRESS);
+    Wire.write((int) DS1631_I2C_COMMAND_START_CONVERT); // Start Conversion
+    if ( Wire.endTransmission() )
+    {
+        Serial.println( F( ">> Error: Start Convert command failed" ) );
+        return false; // Error
+    }
   
-  Serial.println( MSG_DS1631_INIT_END );
+    Serial.println( MSG_DS1631_INIT_END );
   
-  return true; // Success
+    onBoardTemperatureInitialized = true;
+    return true; // Success
 }
+#endif
 
 /// ----------------------------------------------------------------------------------------------------
 /// Show the welcome sequence
 /// ----------------------------------------------------------------------------------------------------
 void showWelcome()
 {
-    #ifdef SHOW_WELCOME    
+#ifdef SHOW_WELCOME    
     
     showAllGearLEDs();
 
@@ -951,7 +977,7 @@ void showWelcome()
     line2 += VERSION;
     printWelcomeScreen(String(Welcome1_Line1), line2, 800, 25, DIRECTION_RIGHT );
    
-    #endif    
+#endif    
 }
 
 /// ----------------------------------------------------------------------------------------------------
@@ -1065,9 +1091,9 @@ void processSerialInput()
 /// ----------------------------------------------------------------------------------------------------
 void printStat()
 {
-#ifdef USE_DS1631
+#ifdef OPT_USE_DS1631
     Serial.print( F( "Tob=" ) );
-    if ( onBoardTemperatureReadError )
+    if ( !onBoardTemperatureInitialized || onBoardTemperatureReadError )
       Serial.println( F( "ERROR" ) );
     else
     {
@@ -1124,14 +1150,14 @@ void handleSetCfg( String arg1, String arg2 )
                 if ( tempMode == 'F' )
                 {
                     lastTemperature = DallasTemperature::toFahrenheit( ds18b20Temperature ); 
-#ifdef USE_DS1631
+#ifdef OPT_USE_DS1631
                     lastOnBoardTemperature = DallasTemperature::toFahrenheit( onBoardTemperature ); 
 #endif                    
                 }
                 else
                 {
                     lastTemperature = DallasTemperature::toCelsius( ds18b20Temperature ); 
-#ifdef USE_DS1631
+#ifdef OPT_USE_DS1631
                     lastOnBoardTemperature = DallasTemperature::toCelsius( onBoardTemperature );                    
 #endif                    
                 }

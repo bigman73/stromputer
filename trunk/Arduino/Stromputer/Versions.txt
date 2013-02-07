@@ -40,5 +40,6 @@
 // []     1.05 -   12/29/2012 + Adaptions to new LCD display module (YwRobot, compatible to LiquidCrystal)
 // []     1.06 -   1/17/2013  + Restored VCC calculation, instead of hard coded 5.0V (using Internal 1.1V reference), Moved to Arudino 1.0.3
 // []     1.07 -   2/3/2013   + Compilation flags, fixed temperature labels position, fixed DS1631 initialization
+// []     1.08 -   2/7/2013   + Added support for Sainsmart LCD Module
 // []
 // [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]

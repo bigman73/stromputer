@@ -39,11 +39,19 @@
 // ================================================================================================
 // ==> Select your LCD type here: Only ONE define should be active from the LCD_TYPE_* defines
 // #define LCD_TYPE_NHD 1
-#define LCD_TYPE_LIQUIDCRYSTAL 1
+#define LCD_TYPE_YWROBOT 1
+// #define LCD_TYPE_SAINSMART 1
+
+
+// --------------------------------
+#if defined(LCD_TYPE_YWROBOT) || defined(LCD_TYPE_SAINSMART)
+  #define LCD_TYPE_LIQUIDCRYSTAL 1
+#endif  
 // ================================================================================================
 
 
 // -----------------    Library Includes    ------------------------
+
 #ifdef LCD_TYPE_NHD
 
   // Include 3rd Party library - LCD I2C NHD

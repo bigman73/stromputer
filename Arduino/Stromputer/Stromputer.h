@@ -33,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "1.07"
+#define VERSION "1.08"
 
 // Macro for defining PROGMEM (Flash) Strings
 //#define FS( text ) (const char*)F(text)
@@ -89,8 +89,12 @@ bool lcdInitialized = false;
      lcd.setCursor(col, row); \
      lcd.print( text );
 
-
+#ifdef LCD_TYPE_YWROBOT
   #define LCD_I2C_ADDRESS 0x27
+#elif LCD_TYPE_SAINSMART
+  #define LCD_I2C_ADDRESS 0x3F
+#endif
+  
   #define LCD_BACKLIGHT_PIN 3
   
   // Define each pin on the LCD (PCF8574t) to a name. These pins are NOT the Arduino pins, they are the LCD (PCF8574t) pins.

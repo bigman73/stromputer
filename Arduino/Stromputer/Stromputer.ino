@@ -247,10 +247,13 @@ void timerISR()
         // Read the gear position analog value 
         readGearPositionAnalog();          
 
+#ifdef OPT_GEAR_LEDS
         // Update Gear Position LEDs (note: updateGearLEDs() is optimized to only actually refresh on gear change)
         updateGearLEDs();
+#endif        
     }
     
+#ifdef OPT_GEAR_LEDS
     // Handle neutral gear blinking, at 4Hz for each toggle
     if ( timerDivider % 250 == 1  && 
          gear == GEAR_NEUTRAL )
@@ -259,6 +262,7 @@ void timerISR()
         // Note: LED::Toggle() doesn't work well, because it uses digitalWrite instead of analogWrite, thus doesn't use PWM and causes the LED to show with full brightness always
         ledGears[ 0 ].setValue( ledGears[ 0 ].getState() ? 0 : ledBrightnessGreen ); // If last state was true, toggle it to true, and visa versa
     }        
+#endif        
 
     timerDivider++;
 }
@@ -421,8 +425,10 @@ void processPhotoCell()
             lightLevel = ( lightLevel + lastLightLevel ) / 2;
             
         lastLightLevel = lightLevel;
-                  
+                
+#ifdef OPT_GEAR_LEDS                  
         forceLedUpdate = true; // Force update of LEDs
+#endif        
          
 #ifdef LCD_TYPE_NHD        
         lcd.setBacklight( lightLevel );
@@ -582,6 +588,9 @@ void printGearPosition()
     lcd_print_at(LCD_ROW_GEAR, LCD_COL_GEAR, gearValue );  
 }
 
+
+#ifdef OPT_GEAR_LEDS
+
 /// ----------------------------------------------------------------------------------------------------
 /// Updates the gear LEDs with current gear position (only if there has been a change)
 /// Note: Netural is blinking and is therefore being handled with a timer ISR, by NeutralGearLedBlink() 
@@ -649,6 +658,7 @@ void updateGearLEDs()
     }
 }
 
+#endif
 
 /// --------------------------------------------------------------------------
 /// Timed Action Event handler for temperatureTimedAction - 
@@ -824,6 +834,10 @@ void printTemperature()
     lcd_print_at(LCD_ROW_OBTEMP_VALUE, LCD_COL_OBTEMP_VALUE, onboardTemperatureValue );  
 #endif    
 }
+
+
+#ifdef OPT_GEAR_LEDS
+
 /// ------------------------------------------------------------
 /// Show all gear LEDs
 /// ------------------------------------------------------------
@@ -874,6 +888,7 @@ void testEachGearLED()
         }
     }
 }
+#endif
 
 /// --------------------------------------------------------------------------
 /// Initialize the LCD (I2C IC)
@@ -977,9 +992,11 @@ bool initializeDS1631()
 /// ----------------------------------------------------------------------------------------------------
 void showWelcome()
 {
-#ifdef SHOW_WELCOME    
+#ifdef OPT_SHOW_WELCOME        
     
+#ifdef OPT_GEAR_LEDS
     showAllGearLEDs();
+#endif    
 
     String line2 = String( Welcome1_Line2);
     line2 += VERSION;
@@ -1216,10 +1233,12 @@ void handleCommand( String cmd, String arg1, String arg2 )
          showWelcome(); 
          // Force immediate refresh
          forceLCDRefresh( true );
-      }
+      }            
       else if ( cmd == CMD_TESTLEDS )
-      {
+      {        
+#ifdef OPT_GEAR_LEDS
           testEachGearLED();
+#endif          
       }
       else if ( cmd == CMD_SETCFG )
       {

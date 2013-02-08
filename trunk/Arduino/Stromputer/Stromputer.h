@@ -33,14 +33,14 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "1.08"
+#define VERSION "1.09"
 
 // Macro for defining PROGMEM (Flash) Strings
 //#define FS( text ) (const char*)F(text)
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
-#define SHOW_WELCOME
+#define OPT_SHOW_WELCOME
 
 // Comment in/out to enable/disable printing the gear volts
 // #define OPT_SHOW_GEARVOLTS
@@ -50,6 +50,9 @@
 
 // DS1631 - OnBoard temperature sensor (was used in Stromputer V1)
 // #define OPT_USE_DS1631
+
+// Show gear LEDs
+#define OPT_GEAR_LEDS
 
 // Temperature mode - F or C
 #define DEFAULT_TEMPERATURE_MODE 'F'
@@ -203,6 +206,9 @@ bool lcdInitialized = false;
 //
 
 
+
+#ifdef OPT_GEAR_LEDS
+
 LED ledGears[6] = { LED( 3 ), LED( 5 ), LED( 6 ), \
                     LED( 9 ), LED( 10 ), LED( 11 ) };
 
@@ -212,6 +218,8 @@ byte ledBrightnessWhite = 127;
 byte ledBrightnessBlue = 127; 
 
 bool forceLedUpdate = false;
+
+#endif
  
 // create a LED object at with the default on-board LED
 LED onBoardLed = LED();
@@ -270,7 +278,11 @@ short gear = 0;               // 0 = Neutral, or 1-6
 long transientGearStartMillis = 0;
 short transientGear = GEAR_ERROR;
 short lastGearLCD = -2;          // Force initial update
+
+#ifdef OPT_GEAR_LEDS
 short lastGearLED = -2;       // Force initial update
+#endif
+
 bool gearReadError = false;
 float gearPositionVolts = 0;
 

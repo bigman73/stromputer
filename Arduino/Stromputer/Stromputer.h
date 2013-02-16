@@ -170,7 +170,7 @@ bool lcdInitialized = false;
 #define GEAR4_FROM_VOLTS 2.90f
 #define GEAR5_FROM_VOLTS 3.65f
 #define GEAR6_FROM_VOLTS 4.30f
-#define GEARN_FROM_VOLTS 4.70f
+#define GEARN_FROM_VOLTS 4.85f
 #define GEARN_TO_VOLTS   5.50f
 
 #define GEAR_NEUTRAL 0

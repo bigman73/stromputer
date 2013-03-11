@@ -33,23 +33,20 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "1.09"
-
-// Macro for defining PROGMEM (Flash) Strings
-//#define FS( text ) (const char*)F(text)
+#define VERSION "1.10"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
 #define OPT_SHOW_WELCOME
 
 // Comment in/out to enable/disable printing the gear volts
-// #define OPT_SHOW_GEARVOLTS
+//  #define OPT_SHOW_GEARVOLTS
 
 // Comment in/out to enable/disable printing the light level (1..8)
-// #define OPT_SHOW_LIGHT_LEVEL
+//  #define OPT_SHOW_LIGHT_LEVEL
 
 // DS1631 - OnBoard temperature sensor (was used in Stromputer V1)
-// #define OPT_USE_DS1631
+//  #define OPT_USE_DS1631
 
 // Show gear LEDs
 #define OPT_GEAR_LEDS

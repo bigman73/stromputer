@@ -49,7 +49,6 @@
 #endif  
 // ================================================================================================
 
-
 // -----------------    Library Includes    ------------------------
 
 #ifdef LCD_TYPE_NHD
@@ -63,13 +62,6 @@
   #include <LCD.h>
   #include <LiquidCrystal_I2C.h>                    
 
-#endif
-
-// Include 3rd Party library -Needed for communication with DS1631
-#ifdef OPT_USE_DS1631
-  
-  #include <Wire.h>
-  
 #endif
 
 // Include 3rd Party library - Timed Actions (Modified by Yuval Naveh)
@@ -99,15 +91,14 @@
 
 #include <RunningAverage.h>
 
+#include "Stromputer.h"
+
 // -----------------------------------------------------------------
 
 // Other References/Credits:
 // DS1631: http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1221926830
 // ISR: http://letsmakerobots.com/node/28278
 // Light Sensors: http://www.ladyada.net/learn/sensors/cds.html
-
-#include "Stromputer.h"
-
 
 // ---------------- Timed Actions (Scheduled re-occouring Events) -------------
 
@@ -128,6 +119,11 @@ TimedAction serialInputTimedAction = TimedAction( 0, SERIALINPUT_TIMED_INTERVAL,
 
 OneWire oneWire( DIGITALPIN_DS18B20 );
 DallasTemperature DS18B20Sensor( &oneWire ); 
+
+// Include 3rd Party library -Needed for communication with DS1631
+#ifdef OPT_USE_DS1631
+  #include <Wire.h>
+#endif
 
 /// --------------------------------------------------------------------------
 /// Arduino one-time setup routine - i.e. Program entry point like main()
@@ -694,7 +690,7 @@ void processTemperature()
     // ******** Handle AUTO STAT Mode **************
     if ( autoStat )
     {
-      printStat();
+        printStat();
     }
     // *********************************************
 }
@@ -819,7 +815,7 @@ void printTemperature()
 
 #ifdef OPT_USE_DS1631
     String onboardTemperatureValue;
-    if ( !onBoardTemperatureInitialized || onBoardTemperatureInitialized ) 
+    if ( !onBoardTemperatureInitialized || onBoardTemperatureReadError ) 
     {
       onboardTemperatureValue = "  ERR";
     }

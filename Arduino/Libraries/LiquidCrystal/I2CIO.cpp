@@ -32,12 +32,47 @@
 
 #include <inttypes.h>
 
-#include <../Wire/Wire.h>
+// Yuval Naveh, 7/7/2013 - SoftI2C Support
+#define USE_SOFTI2C
+
+#ifdef USE_SOFTI2C
+	#include <../SoftI2C/SoftI2C.h>
+#else
+	#include <../Wire/Wire.h>
+#endif
+
 #include "I2CIO.h"
 
 // CLASS VARIABLES
 // ---------------------------------------------------------------------------
 
+#ifdef USE_SOFTI2C
+
+#if defined(__AVR_ATmega1280__)\
+|| defined(__AVR_ATmega2560__)
+// Mega analog pins 4 and 5
+#define I2C_SDA_PIN 58
+#define I2C_SCL_PIN 59
+
+#elif defined(__AVR_ATmega168__)\
+||defined(__AVR_ATmega168P__)\
+||defined(__AVR_ATmega328P__)
+// 168 and 328 Arduinos analog pin 4 and 5
+//#define I2C_SDA_PIN 18
+//#define I2C_SCL_PIN 19
+// Stromputer V3 Patch due to bug in PCB - Use A3 for SCL and A2 for SDA
+#define I2C_SDA_PIN 16
+#define I2C_SCL_PIN 17
+
+#else  // CPU type
+#error unknown CPU
+#endif  // CPU type
+
+	// An instance of class for software master
+	SoftI2C softWire(I2C_SDA_PIN, I2C_SCL_PIN);
+   
+
+#endif // USE_SOFT_I2C
 
 // CONSTRUCTOR
 // ---------------------------------------------------------------------------
@@ -58,16 +93,22 @@ int I2CIO::begin (  uint8_t i2cAddr )
 {
    _i2cAddr = i2cAddr;
    
+   // Yuval Naveh, 7/7/2013 - SoftI2C Support
+   #ifdef USE_SOFTI2C
+	_initialised = softWire.startRead(_i2cAddr, (uint8_t)1);
+	_shadow = softWire.read();
+	
+   #else
    Wire.begin ( );
       
    _initialised = Wire.requestFrom ( _i2cAddr, (uint8_t)1 );
-
+   
 #if (ARDUINO <  100)
    _shadow = Wire.receive ();
 #else
    _shadow = Wire.read (); // Remove the byte read don't need it.
 #endif
-   
+	#endif   
    return ( _initialised );
 }
 
@@ -114,13 +155,20 @@ uint8_t I2CIO::read ( void )
    
    if ( _initialised )
    {
+   // Yuval Naveh, 7/7/2013 - SoftI2C Support
+   #ifdef USE_SOFTI2C
+		softWire.startRead(_i2cAddr, (uint8_t)1);
+		retVal = ( _dirMask & softWire.read ( ) );
+   #else   
       Wire.requestFrom ( _i2cAddr, (uint8_t)1 );
 #if (ARDUINO <  100)
       retVal = ( _dirMask & Wire.receive ( ) );
 #else
       retVal = ( _dirMask & Wire.read ( ) );
 #endif      
-      
+
+	#endif      
+	
    }
    return ( retVal );
 }
@@ -137,6 +185,12 @@ int I2CIO::write ( uint8_t value )
       // outputs updating the output shadow of the device
       _shadow = ( value & ~(_dirMask) );
    
+   // Yuval Naveh, 7/7/2013 - SoftI2C Support
+   #ifdef USE_SOFTI2C
+		softWire.startWrite(_i2cAddr);
+		softWire.write ( _shadow );
+		status = softWire.endWrite();
+   #else   
       Wire.beginTransmission ( _i2cAddr );
 #if (ARDUINO <  100)
       Wire.send ( _shadow );
@@ -144,6 +198,7 @@ int I2CIO::write ( uint8_t value )
       Wire.write ( _shadow );
 #endif  
       status = Wire.endTransmission ();
+	#endif
    }
    return ( (status == 0) );
 }

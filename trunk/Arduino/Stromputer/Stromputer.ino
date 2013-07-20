@@ -36,6 +36,8 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
+#define STROMPUTER_V3_PATCH
+
 // ================================================================================================
 // ==> Select your LCD type here: Only ONE define should be active from the LCD_TYPE_* defines
 // #define LCD_TYPE_NHD 1
@@ -120,9 +122,15 @@ TimedAction serialInputTimedAction = TimedAction( 0, SERIALINPUT_TIMED_INTERVAL,
 OneWire oneWire( DIGITALPIN_DS18B20 );
 DallasTemperature DS18B20Sensor( &oneWire ); 
 
-// Include 3rd Party library -Needed for communication with DS1631
+// Include 3rd Party library - Needed for communication with DS1631
 #ifdef OPT_USE_DS1631
   #include <Wire.h>
+#endif
+
+
+// IMPORTANT - Needed for using SoftI2C, the V3 PCB (1st Batch) was designed and printed with the analog pins in reverse order (A7..A0) instead of (A0..A7)
+#ifdef STROMPUTER_V3_PATCH
+  #include <SoftI2C.h>                    
 #endif
 
 /// --------------------------------------------------------------------------

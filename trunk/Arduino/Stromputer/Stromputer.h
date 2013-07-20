@@ -176,12 +176,21 @@ bool lcdInitialized = false;
 // Buttons are pulled up, so pressed is zero voltage or logical zero, released is VCC or logical on
 #define BUTTON_DOWN 0
 
-// Battery level (4:1 voltage divider) is connected to Analog Pin 0
-#define ANALOGPIN_BATT_LEVEL A0
-// Gear Position (2:1 voltage divider) is connected to Analog Pin 1
-#define ANALOGPIN_GEAR_POSITION A3
-// Photocell level (3K-11K:10K voltage divider) is connected to Analog Pin 2
-#define ANALOGPIN_PHOTCELL A2
+#ifdef STROMPUTER_V3_PATCH
+  // Battery level (4:1 voltage divider) is connected to Analog Pin 0
+  #define ANALOGPIN_BATT_LEVEL A7
+  // Gear Position (2:1 voltage divider) is connected to Analog Pin 1
+  #define ANALOGPIN_GEAR_POSITION A4
+  // Photocell level (3K-11K:10K voltage divider) is connected to Analog Pin 2
+  #define ANALOGPIN_PHOTCELL A5
+#else
+  // Battery level (4:1 voltage divider) is connected to Analog Pin 0
+  #define ANALOGPIN_BATT_LEVEL A0
+  // Gear Position (2:1 voltage divider) is connected to Analog Pin 1
+  #define ANALOGPIN_GEAR_POSITION A3
+  // Photocell level (3K-11K:10K voltage divider) is connected to Analog Pin 2
+  #define ANALOGPIN_PHOTCELL A2
+#endif
 
 #define DIGITALPIN_DS18B20 4
 

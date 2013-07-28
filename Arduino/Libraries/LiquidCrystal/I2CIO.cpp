@@ -57,12 +57,16 @@
 #elif defined(__AVR_ATmega168__)\
 ||defined(__AVR_ATmega168P__)\
 ||defined(__AVR_ATmega328P__)
+// TODO: Restore in a future fixed version of the PCB (e.g. V4)
 // 168 and 328 Arduinos analog pin 4 and 5
 //#define I2C_SDA_PIN 18
 //#define I2C_SCL_PIN 19
-// Stromputer V3 Patch due to bug in PCB - Use A3 for SCL and A2 for SDA
-#define I2C_SDA_PIN 16
-#define I2C_SCL_PIN 17
+
+// *********** WORKAROUND ************
+// ** Stromputer V3 Patch due to bug in PCB - Use A2 (on PCB labeled as A5) for SCL and A3 (on PCB labeled as A4) for SDA **
+#define I2C_SDA_PIN 17
+#define I2C_SCL_PIN 16
+// ***********************************
 
 #else  // CPU type
 #error unknown CPU

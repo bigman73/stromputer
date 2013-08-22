@@ -33,7 +33,7 @@
   "YMmMY"     MMM     MMMM   "W"   "YMMMMMP" MMM  M'  "MMMYMMMb    "YmmMMMM""     MMM     """"YUMMMMMMM   "W" 
 */
 
-#define VERSION "3.00"
+#define VERSION "3.01"
 
 // ---------------- Control/Operation mode ------------------------
 // Comment in/out to enable/disable showing the welcome screen, when the sketch starts
@@ -55,6 +55,9 @@
 #define DEFAULT_TEMPERATURE_MODE 'F'
 
 #define SERIAL_SPEED_BAUD 38400
+
+// V3 PCB - Comment in If LEDs are soldered on the front of the PCB (where the labels are printed). Otherwise LEDs will go from right to left, incorrectly.
+// #define V3_USE_LEDS_PCBFRONT
 
 // ------------------------- LCD -------------------------------------------
 
@@ -215,8 +218,13 @@ bool lcdInitialized = false;
 
 #ifdef OPT_GEAR_LEDS
 
+#ifdef V3_USE_LEDS_PCBFRONT
+LED ledGears[6] = { LED( 11 ), LED( 10 ), LED( 9 ), \
+                    LED( 6 ),  LED( 5 ),  LED( 3 ) };
+#else
 LED ledGears[6] = { LED( 3 ), LED( 5 ), LED( 6 ), \
                     LED( 9 ), LED( 10 ), LED( 11 ) };
+#endif // V3_USE_LEDS_PCBFRONT
 
 byte ledBrightnessGreen = 5;  
 byte ledBrightnessYellow = 127; 
@@ -225,7 +233,7 @@ byte ledBrightnessBlue = 127;
 
 bool forceLedUpdate = false;
 
-#endif
+#endif // OPT_GEAR_LEDS
  
 // create a LED object at with the default on-board LED
 LED onBoardLed = LED();

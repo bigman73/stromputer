@@ -72,9 +72,8 @@
 #error unknown CPU
 #endif  // CPU type
 
-	// An instance of class for software master
-	SoftI2C softWire(I2C_SDA_PIN, I2C_SCL_PIN);
-   
+// An instance of class for software master
+extern SoftI2C softWire(I2C_SDA_PIN, I2C_SCL_PIN);   
 
 #endif // USE_SOFT_I2C
 

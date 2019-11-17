@@ -22,6 +22,12 @@ Compare that to commercial gear indicators/battery indicator/temperature gauges.
 
 Current status: Fully Functional (V1.09 - As of 2/7/2013)
 
+## References
+### Brickuino
+[Brickuino](http://k75retro.blogspot.com/2014/02/) is a spin off project for BMW K75 Brick motorcycle, based on Stromputer
+![Brickuino BMW K75](Images/Brickuino.jpg)
+
+
 ## License 
 
 Attribution-NonCommercial-ShareAlike 3.0 Unported (CC BY-NC-SA 3.0)

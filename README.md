@@ -1,8 +1,7 @@
 # stromputer
-Automatically exported from code.google.com/p/stromputer
 
 V-Strom + Computer --> Stromputer!
-An Arduino based project, that adds the following features to a Mk1 (2004-2011) Suzuki V-Strom Motorcycles (DL650, DL1000):
+An Arduino based project, that adds the following features to a Mk1 (2004-2011) Suzuki V-Strom Motorcycles (DL650, DL1000)
 
 Auxiliary LCD display that can reside on the handle bar
 Automatic adjustment of LCD display back light using a photo sensor (i.e. at darkness dim LCD display, at full bright day brighten display)

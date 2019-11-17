@@ -3,6 +3,8 @@
 V-Strom + Computer --> Stromputer!
 An Arduino based project, that adds the following features to a Mk1 (2004-2011) Suzuki V-Strom Motorcycles (DL650, DL1000)
 
+![Stromputer V1 installation of a 2011 Suzuki V-Strom 650](Images/StromputerV1.jpg)
+
 ## Features
 
 * Auxiliary LCD display that can reside on the handle bar
